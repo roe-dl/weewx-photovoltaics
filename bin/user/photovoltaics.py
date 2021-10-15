@@ -438,15 +438,15 @@ class E3dcThread(BaseThread):
                 # flatten the result dict
                 x = {}
                 for lvl1 in result:
-                    if lvl1 in ('time'):
+                    if lvl1 in ('time',):
                         x[lvl1] = result[lvl1].timestamp()
                     elif isinstance(result[lvl1],dict):
                         for lvl2 in result[lvl1]:
                             key = '%s_%s' % (lvl1,lvl2)
-                            if result[lvl1][lvl2]:
+                            if result[lvl1][lvl2] is not None:
                                 x[key] = result[lvl1][lvl2]
                     else:
-                        if result[lvl1]:
+                        if result[lvl1] is not None:
                             x[lvl1] = result[lvl1]
                 # result2
                 try:
@@ -796,6 +796,7 @@ class E3dcService(StdService):
             return {}
         # accumulate values
         for ii,val in enumerate(data):
+            #loginf("1 %s" % val)
             for key in val:
                 try:
                     if key in ('time','unixtime'):
@@ -818,6 +819,7 @@ class E3dcService(StdService):
                 except Exception:
                     pass
         # extract values (average, sum, last)
+        #loginf("2 %s" % result)
         x = {}
         for key in result:
             try:
