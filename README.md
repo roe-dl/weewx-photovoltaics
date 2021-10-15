@@ -65,27 +65,33 @@ pv_binding`
 
 ### Battery storage
 
-emsBatteryPower | W
-emsBatteryCharge | %
-emsBatteryChargePower | W
-emsBatteryDischargePower | W
-sumBatteryChargeEnergy | kWh
-sumBatteryDischargeEnergy | kWh
+Tag | Unit |
+----|------|
+emsBatteryPower | W |
+emsBatteryCharge | % |
+emsBatteryChargePower | W |
+emsBatteryDischargePower | W |
+sumBatteryChargeEnergy | kWh |
+sumBatteryDischargeEnergy | kWh |
 
 ### supply
 
-emsGridPower | W
-emsGridInPower | W
-emsGridOutPower | W
-emsSolarPower | W
-emsAddPower | W
-sumSolarEnergy | kWh
-sumGridInEnergy | kWh
-sumGridOutEnergy | kWh
-sumAddEnergy | kWh
+Tag | Unit |
+----|------|
+emsGridPower | W |
+emsGridInPower | W |
+emsGridOutPower | W |
+emsSolarPower | W |
+emsAddPower | W |
+sumSolarEnergy | kWh |
+sumGridInEnergy | kWh |
+sumGridOutEnergy | kWh |
+sumAddEnergy | kWh |
 
 ### Consumption
 
+Tag | Unit |
+----|------|
 emsHousePower | W
 emsWallPower | W
 emsAutarky | %
@@ -94,6 +100,8 @@ sumWallEnergy | kWh
 
 ### Static values
 
+Tag | Unit |
+----|------|
 installedPVPeakPower | W
 installedBatteryCapacity | Wh
 pvMaxAcPower | W
@@ -102,6 +110,8 @@ pvMaxBatDischargePower | W
 
 ### PM
 
+Tag | Unit |
+----|------|
 pmGridPowerL1 | W
 pmGridPowerL2 | W
 pmGridPowerL3 | W
@@ -114,6 +124,8 @@ pmGridEnergyL3 | kWh
 
 ### myPV ACTHOR
 
+Tag | Unit |
+----|------|
 heataccuTemp | °C
 heataccuVoltage | V
 heataccuPower | W
