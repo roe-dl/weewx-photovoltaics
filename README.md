@@ -65,72 +65,72 @@ pv_binding`
 
 ### Battery storage
 
-Tag | Unit |
-----|------|
-emsBatteryPower | W |
-emsBatteryCharge | % |
-emsBatteryChargePower | W |
-emsBatteryDischargePower | W |
-sumBatteryChargeEnergy | kWh |
-sumBatteryDischargeEnergy | kWh |
+Tag | Unit | Alt. Unit
+----|------|----------
+`emsBatteryPower` | W | kW
+`emsBatteryCharge` | % |
+`emsBatteryChargePower` | W | kW
+`emsBatteryDischargePower` | W | kW
+`sumBatteryChargeEnergy` | Wh | kWh
+`sumBatteryDischargeEnergy` | Wh | kWh
 
-### supply
+### Supply
 
-Tag | Unit |
-----|------|
-emsGridPower | W |
-emsGridInPower | W |
-emsGridOutPower | W |
-emsSolarPower | W |
-emsAddPower | W |
-sumSolarEnergy | kWh |
-sumGridInEnergy | kWh |
-sumGridOutEnergy | kWh |
-sumAddEnergy | kWh |
+Tag | Unit | Alt. Unit
+----|------|----------
+`emsGridPower` | W | kW
+`emsGridInPower` | W | kW
+`emsGridOutPower` | W | kW
+`emsSolarPower` | W | kW
+`emsAddPower` | W | kW
+`sumSolarEnergy` | Wh | kWh
+`sumGridInEnergy` | Wh | kWh
+`sumGridOutEnergy` | Wh | kWh
+`sumAddEnergy` | Wh | kWh
 
 ### Consumption
 
-Tag | Unit |
-----|------|
-emsHousePower | W
-emsWallPower | W
-emsAutarky | %
-sumHouseEnergy | kWh
-sumWallEnergy | kWh
+Tag | Unit | Alt. Unit
+----|------|----------
+`emsHousePower` | W | kW
+`emsWallPower` | W | kW
+`emsAutarky` | % |
+`sumHouseEnergy` | Wh | kWh
+`sumWallEnergy` | Wh | kWh
 
 ### Static values
 
 Tag | Unit |
 ----|------|
-installedPVPeakPower | W
-installedBatteryCapacity | Wh
-pvMaxAcPower | W
-pvMaxBatChargePower | W
-pvMaxBatDischargePower | W
+`installedPVPeakPower` | W
+`installedBatteryCapacity` | Wh
+`pvMaxAcPower` | W
+`pvMaxBatChargePower` | W
+`pvMaxBatDischargePower` | W
 
 ### PM
 
 Tag | Unit |
 ----|------|
-pmGridPowerL1 | W
-pmGridPowerL2 | W
-pmGridPowerL3 | W
-pmGridVoltageL1 | V
-pmGridVoltageL2 | V
-pmGridVoltageL3 | V
-pmGridEnergyL1 | kWh
-pmGridEnergyL2 | kWh
-pmGridEnergyL3 | kWh
+`pmGridPowerL1` | W
+`pmGridPowerL2` | W
+`pmGridPowerL3` | W
+`pmGridVoltageL1` | V
+`pmGridVoltageL2` | V
+`pmGridVoltageL3` | V
+`pmGridEnergyL1` | kWh
+`pmGridEnergyL2` | kWh
+`pmGridEnergyL3` | kWh
 
 ### myPV ACTHOR
 
 Tag | Unit |
 ----|------|
-heataccuTemp | °C
-heataccuVoltage | V
-heataccuPower | W
-heataccuMainsVoltage | V
-heataccuMainsCurrent | A
+`heataccuTemp` | °C
+`heataccuVoltage` | V
+`heataccuPower` | W
+`heataccuMainsVoltage` | V
+`heataccuMainsCurrent` | A
 
 ## Database
 
@@ -142,6 +142,6 @@ Reading can be output to MQTT. You need an MQTT broker for that.
 
 ## Links
 
-[Python-E3/DC-driver](https://github.com/fsantini/python-e3dc)
-[E3/DC photovolatics inverter](https://www.e3dc.com)
-[myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
+* [Python-E3/DC-driver](https://github.com/fsantini/python-e3dc)
+* [E3/DC photovolatics inverter](https://www.e3dc.com)
+* [myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
