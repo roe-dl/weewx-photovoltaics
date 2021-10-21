@@ -189,7 +189,7 @@ E3DC_OBS = {
     'sumWallEnergy':('sumWallEnergy','watt_hour','group_energy',ACCUM_SUM),
     # static values
     'installedPeakPower':('installedPVPeakPower','watt','group_power',None),
-    'installedBatteryCapacity':('installedBatteryCapacity','watt','group_power',None),
+    'installedBatteryCapacity':('installedBatteryCapacity','watt_hour','group_energy',None),
     'maxAcPower':('pvMaxAcPower','watt','group_power',None),
     'maxBatChargePower':('pvMaxBatChargePower','watt','group_power',None),
     'maxBatDischargePower':('pvMaxBatDischargePower','watt','group_power',None),
@@ -444,12 +444,28 @@ class E3dcThread(BaseThread):
                         for lvl2 in result[lvl1]:
                             key = '%s_%s' % (lvl1,lvl2)
                             if result[lvl1][lvl2] is not None:
-                                x[key] = result[lvl1][lvl2]
+                                try:
+                                    x[key] = weeutil.weeutil.to_float(
+                                                            result[lvl1][lvl2])
+                                except (ValueError,TypeError,LookupError):
+                                    pass
                     else:
                         if result[lvl1] is not None:
-                            x[lvl1] = result[lvl1]
-                # result2
+                            try:
+                                x[lvl1] = weeutil.weeutil.to_float(
+                                                                  result[lvl1])
+                            except (ValueError,TypeError,LookupError):
+                                pass
+                # result2 PM
                 try:
+                    # check that all readings can be converted to float
+                    for lvl1 in result2:
+                        try:
+                            result2[lvl1] = weeutil.weeutil.to_float(
+                                                                 result2[lvl1])
+                        except (ValueError,TypeError,LookupError):
+                            pass
+                    # insert 
                     x.update(result2)
                 except Exception:
                     pass
@@ -829,7 +845,7 @@ class E3dcService(StdService):
                     obs_list[key][2])
             except (TypeError,IndexError):
                 val = result[key]
-            except (TypeError,ValueError,KeyError,ArithmeticError):
+            except (ValueError,KeyError,ArithmeticError):
                 val = None
             try:
                 x[obs_list[key][0]] = val
@@ -987,6 +1003,8 @@ class E3dcUnits(StdService):
 
     def __init__(self, engine, config_dict):
         super(E3dcUnits,self).__init__(engine, config_dict)
+        weewx.units.default_unit_label_dict.setdefault('kilowatt',u" kW")
+        weewx.units.default_unit_format_dict.setdefault('kilowatt',"%.1f") 
         self._augment_obs_group_dict()
         
     def _augment_obs_group_dict(self):
