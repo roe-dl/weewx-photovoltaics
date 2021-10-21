@@ -140,8 +140,111 @@ Readings are saved to `photovoltaics.sdb`
 
 Reading can be output to MQTT. You need an MQTT broker for that.
 
+## Usage in skins
+
+### Belchertown skin
+
+Example, what to add to `graphs.conf`:
+```
+[PV-Anlage]
+    title = "PV-Anlage"
+    show_button = true
+    button_text = "PV-Anlage"
+    data_binding = pv_binding
+    page_content = """
+some general text"""
+
+    [[pvGraphToday]]
+        time_length = today
+        tooltip_date_format = "LLL"
+        gapsize = 300 
+        title = PV-Leistung heute
+        yAxis_label = Leistung
+        exporting = 1
+        [[[emsSolarPower]]]
+            name = "PV-Leistung (5-Minuten-Durchschnitt)"
+            color = "#ffc83f"
+
+    [[solarRadGraph]]
+        time_length = today
+        tooltip_date_format = "LLL"
+        gapsize = 300 
+        title = "Sonnenstrahlung und UV-Index heute"
+        exporting = 1
+        [[[radiation]]]
+            name = Sonnenstrahlung
+            zIndex = 1
+            color = "#ffc83f"
+        [[[maxSolarRad]]]
+            name = Theoretischer Maximalwert
+            type = area
+            color = "#f7f2b4"
+            yAxis_label = "W/m&sup2;"
+        [[[UV]]]
+            yAxis = 1
+            yAxis_min = 0
+            yAxis_max = 14
+            color = "#90ed7d"
+            yAxis_label = "UV"
+            name = "UV-Index"
+            zIndex = 2
+
+    [[pvGraphWeek]]
+        time_length = 604800 # Last 7 days
+        tooltip_date_format = "LLLL"
+        aggregate_type = avg
+        aggregate_interval = 3600 # 1 hour
+        gapsize = 3600 # 1 hour in seconds
+        start_at_whole_hour = true
+        title = PV-Leistung Woche
+        yAxis_label = Leistung
+        exporting = 1
+        [[[emsSolarPower]]]
+            name = "PV-Leistung (Stundendurchschnitt)"
+            color = "#ffc83f"
+
+    [[PVEnergy]]
+        time_length = 2592000 # Last 30 days
+        tooltip_date_format = "dddd LL"
+        gapsize = 86400 # 1 day in seconds
+        title = "PV-Ertrag"
+        aggregate_interval = 86400
+        yAxis_label = Energie
+        yAxis_label_unit = "Wh"
+        start_at_midnight = true
+        exporting = 1
+        [[[emsSolarPower]]]
+            name = Tagesertrag
+            aggregate_type = energy_integral
+            type = column
+            color = "#ffc83f"
+
+    [[PVmax]]
+        time_length = 2592000 # Last 30 days
+        tooltip_date_format = "dddd LL"
+        gapsize = 86400 # 1 day in seconds
+        title = "Tägliches Leistungsmaximum"
+        aggregate_interval = 86400
+        yAxis_label = Leistung
+        #yAxis_label_unit = "W"
+        start_at_midnight = true
+        exporting = 1
+        [[[emsSolarPower]]]
+            name = Tagesleistungsmaximum
+            aggregate_type = max
+            type = spline
+            color = "#ffc83f"
+```
+
+See `skins/Belchertown/about/photovoltaics.html.tmpl` for an example
+PV page with live update of solar power by MQTT. Please note: The
+example assumes the readings to be stored in weewx.sdb rather than
+photovoltaics.sdb. So add `data_binding = pv_binding` to change
+that if necessary.
+
 ## Links
 
 * [Python-E3/DC-driver](https://github.com/fsantini/python-e3dc)
 * [E3/DC photovolatics inverter](https://www.e3dc.com)
 * [myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
+* [example page](https://www.woellsdorf-wetter.de/about/photovoltaics.html)

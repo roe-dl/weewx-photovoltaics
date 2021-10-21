@@ -1,0 +1,466 @@
+#errorCatcher Echo
+#encoding UTF-8
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTweek.daylights
+#set x = $span.emsSolarPower.avg.kilowatt.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set weekSPavg = "%.1f kW" % (summe / anzahl)
+#else
+#set weekSPavg = ""
+#end if
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTmonth.daylights
+#set x = $span.emsSolarPower.avg.kilowatt.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set monthSPavg = "%.1f kW" % (summe / anzahl)
+#else
+#set monthSPavg = ""
+#end if
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTyear.daylights
+#set x = $span.emsSolarPower.avg.kilowatt.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set yearSPavg = "%.1f kW" % (summe / anzahl)
+#else
+#set yearSPavg = ""
+#end if
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTweek.daylights
+#set x = $span.radiation.avg.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set weekRadavg = "%.0f W/m²" % (summe / anzahl)
+#else
+#set weekRadavg = ""
+#end if
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTmonth.daylights
+#set x = $span.radiation.avg.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set monthRadavg = "%.0f W/m²" % (summe / anzahl)
+#else
+#set monthRadavg = ""
+#end if
+
+#set summe = 0
+#set anzahl = 0
+#for $span in $LMTyear.daylights
+#set x = $span.radiation.avg.raw
+#if $x is not None
+#set summe = summe + x
+#set anzahl = anzahl + 1
+#end if
+#end for
+#if $anzahl > 0
+#set yearRadavg = "%.0f W/m²" % (summe / anzahl)
+#else
+#set yearRadavg = ""
+#end if
+
+    #include "header.html.tmpl"
+
+    <script type="text/javascript">
+        var finalRotation;
+        #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+        var mqttMsg;
+        var mqttclient = "website" + Math.floor(Math.random() * 999999999);
+        #end if
+        var moment_locale = "$system_locale_js";
+        moment.locale(moment_locale);
+
+        var homepage_graphgroup = "PV-Anlage";
+
+        function autoRefreshPage() {
+            window.location = window.location.href;
+        }
+
+        ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
+            update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
+            belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
+
+            #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '0' and $Extras.has_key("webpage_autorefresh") and $Extras.webpage_autorefresh != '0'
+            // Reload the page on an interval for updated data. This is for non-mqtt websocket websites
+            setInterval('autoRefreshPage()', $Extras.webpage_autorefresh);
+            #end if
+
+            jQuery(document).ready(function() {
+
+                // Update the Last Updated timestamp with moment.js,
+                updated = tzAdjustedMoment( $current.dateTime.raw ).format("$obs.label.time_last_updated");
+                updated_text = "$obs.label.header_last_updated " + updated;
+                jQuery(".updated").html( updated_text );
+
+                #if $Extras.has_key("mqtt_websockets_enabled") and $Extras.mqtt_websockets_enabled == '1'
+                if ( getURLvar("offline") && ( getURLvar("offline") == "true" || getURLvar("offline") == "1" ) ) {
+                    belchertown_debug("MQTT: offline url var detected. Skipping MQTT connect.");
+                } else {
+                    connect(); // Begin mqtt after weewx initial load
+                    // If the Restart button is clicked, reconnect to mqtt and update weewx and forecast data
+                    jQuery(document).on('click', '.restart-interval', function() { 
+                        ajaxweewx().then(function(weewx_data) { // This call will make sure json/weewx_data.json is loaded before anything else
+                            update_weewx_data(weewx_data); // Initial call to update (date, daily high, low, etc)
+                            belchertown_debug(weewx_data); // Make weewx_data.json available in debugging console
+
+                            connect(); // Restart mqtt after weewx data's re-loaded
+                            #if $Extras.has_key('highcharts_enabled') and $Extras.highcharts_enabled == '1'
+                            showChart(homepage_graphgroup);
+                            #end if
+                        }).catch(function(e){
+                            console.log(e);
+                        });
+                    });
+                }
+                #end if
+
+            });
+        }).catch(function(e) {
+            console.log(e);
+        });
+
+    </script>
+
+
+
+
+    <div class="site-inner">
+        <main class="content">	
+            <article class="weewx graphs" itemscope itemtype="https://schema.org/CreativeWork">
+
+                <script type="text/javascript">
+                    var graph = getURLvar("graph");
+                    if ( graph === undefined ) {
+                        // If no URL VAR, default to the graph group defined in Extras
+                        //graph = "$Extras.graph_page_default_graphgroup";
+                        //graph = "$page";
+                        graph = "PV-Anlage";
+                    }
+                    var thisPageGraphs = graphgroups_raw[graph];
+                    
+                    jQuery(document).ready(function() {
+                            // Loop through the graph group for this page and add the graph divs to the page
+                            try {
+                                thisPageGraphs.forEach( graphID => {
+                                    var graph_width = (graphID=='Hochwasser2013' || graphID=='Hochwasser2002') ? '12' : '6' ;
+                                    jQuery(".graph-outer").append('<div class="col-sm-'+graph_width+'"><div id="' + graphID + '" style="width:100%;height:100%;margin-top:20px;"></div></div>');
+                                });
+                                
+                                // Set page title
+                                //jQuery(".graphpage-title").html(graphgroups_titles[graph]);
+                                
+                                // Set page content
+                                //jQuery(".graphpage-content").html(graphpage_content[graph]);
+                                
+                                // Render the charts
+                                showChart(graph);
+                            } catch(err) {
+                                console.log("ERROR: Cannot add graphs from [" + graph + "] graph group: " + err.message);
+                            }
+                    });
+                </script>
+
+## from page-header.inc
+<div class="wx-stn-info-container">
+    <div class="row">
+        <div class="col-sm-1 wx-stn-info-current-obs">
+            <span class="obs-header-icon">
+                #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and $current_obs_icon != ""
+                <img id="wxicon" src="$relative_url/images/$current_obs_icon" width=50% alt="$current_obs_summary">
+                #end if
+            </span>
+            <span class="obs-header-outtemp">$current.outTemp</span>
+        </div>
+        <div class="col-sm-5">
+            <div class="wx-stn-name">
+                <h1>$gettext[$page]['page_header']</h1>
+            </div>
+        </div>
+        <div class="col-sm-5" style="float:right;">
+            <div class="wx-stn-info">
+                $obs.label.powered_by
+            </div>
+            #if $social_html != ""
+            <div class="col-sm-10 wx-stn-info-social" style="float:right;">
+                $social_html
+            </div>
+            #end if
+        </div>
+    </div>
+
+
+                    <!-- Updated time ago -->
+                    <div class="updated-wrapper col-12">
+                        <div class="onlineMarkerOuter">
+                            <span class="loadingMarker" style="display:none"></span>
+                            <span class="onlineMarker" style="display:none"></span>
+                            <span class="offlineMarker" style="display:none"></span>
+                        </div>
+                        <div class="updated"></div><!-- AJAX moment.js -->
+                    </div>
+
+    <div class="clear"></div>
+</div>
+
+                <div class="entry-content">
+
+
+                <div class="row border-bottom">
+                    <div class="col-lg-4">
+                        <div class="row obs-row">
+                        
+                            <div class="pv-obs-top">
+                                <div class="row temp-observation">
+                                    <div class="col-sm-6 current_obs_top">
+                                        #if $Extras.has_key("forecast_enabled") and $Extras.forecast_enabled == '1' and $current_obs_icon != ""
+                                        <img id="wxicon" src="$relative_url/images/$current_obs_icon">
+                                        #end if
+                                    </div>
+                                    <div class="col-sm-6 current_temp">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-6 current-obs-container">
+                                        <div class="current-obs-text">
+                                            $current_obs_summary
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-6 sun" style="text-align:center">
+                                                    <span class="sunrise-set-image"><img src="$relative_url/images/sunrise.png" alt="Sonnenaufgang"></span><span class="sunrise-value"></span><!-- moment.js -->
+                                                    <br>
+                                                    <span class="sunrise-set-image"><img src="$relative_url/images/sunset.png" alt="Sonnenuntergang"></span><span class="sunset-value"></span><!-- moment.js -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Station observations -->
+                    <div class="col-lg-3 border-left border-right">
+                        <div class="station-observations pv-obs-top">
+                            <div class="pv-title">Momentanwerte</div>
+                            <table cellpadding="0" cellspacing="0">
+                                <tbody>
+                                   <tr>
+    <td>PV-Leistung</td><td><span class="emsSolarPower">$current.emsSolarPower</span></td>
+                                   </tr>
+                                   <tr>
+    <td>Sonnenstrahlung</td><td><span class="radiation">$current.radiation</span></td>
+                                   </tr>
+                                   <tr>
+    <td>theoret. Max.</td><td><span class="maxSolarRad">$current.maxSolarRad</span></td>
+                                   </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-5 pv-obs-top">
+
+                        <div class="pv-title">Technische Daten</div>
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <td>Nennleistung:</td>
+                                    <td>$current.installedPVPeakPower.kilowatt.format(add_label=False) kWp</td>
+                                </tr>
+                                <tr>
+                                    <td>Kapazität des Speichers:</td>
+                                    <td>$current.installedBatteryCapacity.kilowatt_hour</td>
+                                </tr>
+                                <tr>
+                                    <td>Umrichter und Speicher:</td>
+                                    <td>E3/DC <a href="https://www.e3dc.com/wp-content/uploads/2020/08/TDB_S10_E_PRO.pdf" target="_blank">S10E ...</a></td>
+                                </tr>
+                                <tr>
+                                    <td>Errichter der Anlage:</td>
+                                    <td><a href="..."
+                    target="_blank">...</a></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+
+                </div>
+                <div class="clear" style="margin:10px">
+                </div>
+
+  <div class="col-sm-12"><h2 style="text-align:center">Zusammenfassung</h2></div>
+
+  <div class="row records-table">
+  <table class="table-striped">
+    <tbody>
+    <tr>
+      <td class="records-header" colspan=6>
+        Leistung
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td class="records-header-year">Heute</td>
+      <td class="records-header-alltime">Gestern</td>
+      <td class="records-header-year">Diese Woche</td>
+      <td class="records-header-alltime">Diesen Monat</td>
+      <td class="records-header-year">Dieses Jahr</td>
+    </tr>
+    <tr>
+      <td>PV-Leistung Mittelwert <sup>*)</sup></td>
+      <td class="leftborder" style="text-align:right">$daylight.emsSolarPower.avg.kilowatt</td>
+      <td style="text-align:right">$daylight(days_ago=1).emsSolarPower.avg.kilowatt</td>
+      <td style="text-align:right">$weekSPavg</td>
+      <td style="text-align:right">$monthSPavg</td>
+      <td style="text-align:right">$yearSPavg</td>
+    </tr>
+    <tr>
+      <td>PV-Leistung Maximum</td>
+      <td class="leftborder" style="text-align:right">$day.emsSolarPower.max.kilowatt<br/>$day.emsSolarPower.maxtime</td>
+      <td style="text-align:right">$yesterday.emsSolarPower.max.kilowatt<br/>$yesterday.emsSolarPower.maxtime</td>
+      <td style="text-align:right">$week.emsSolarPower.max.kilowatt<br/>$week.emsSolarPower.maxtime</td>
+      <td style="text-align:right">$month.emsSolarPower.max.kilowatt<br/>$month.emsSolarPower.maxtime</td>
+      <td style="text-align:right">$year.emsSolarPower.max.kilowatt<br/>$year.emsSolarPower.maxtime</td>
+    </tr>
+    <tr>
+      <td>Mittlere Sonnenstrahlung <sup>*)</sup></td>
+      <td class="leftborder" style="text-align:right">$daylight.radiation.avg</td>
+      <td style="text-align:right">$daylight(days_ago=1).radiation.avg</td>
+      <td style="text-align:right">$weekRadavg</td>
+      <td style="text-align:right">$monthRadavg</td>
+      <td style="text-align:right">$yearRadavg</td>
+    </tr>
+    <tr>
+      <td>Stärkste Sonnenstrahlung</td>
+      <td class="leftborder" style="text-align:right">$day.radiation.max<br/>$day.radiation.maxtime</td>
+      <td style="text-align:right">$yesterday.radiation.max<br/>$yesterday.radiation.maxtime</td>
+      <td style="text-align:right">$week.radiation.max<br/>$week.radiation.maxtime</td>
+      <td style="text-align:right">$month.radiation.max<br/>$month.radiation.maxtime</td>
+      <td style="text-align:right">$year.radiation.max<br/>$year.radiation.maxtime</td>
+    </tr>
+    <tr>
+      <td>Netzbezug Maximum</td>
+      <td class="leftborder" style="text-align:right">$day.emsGridPower.max.kilowatt<br/>$day.emsGridPower.maxtime</td>
+      <td style="text-align:right">$yesterday.emsGridPower.max.kilowatt<br/>$yesterday.emsGridPower.maxtime</td>
+      <td style="text-align:right">$week.emsGridPower.max.kilowatt<br/>$week.emsGridPower.maxtime</td>
+      <td style="text-align:right">$month.emsGridPower.max.kilowatt<br/>$month.emsGridPower.maxtime</td>
+      <td style="text-align:right">$year.emsGridPower.max.kilowatt<br/>$year.emsGridPower.maxtime</td>
+    </tr>
+    <tr>
+      <td>Verbrauch Maximum</td>
+      <td class="leftborder" style="text-align:right">$day.emsHousePower.max.kilowatt<br/>$day.emsHousePower.maxtime</td>
+      <td style="text-align:right">$yesterday.emsHousePower.max.kilowatt<br/>$yesterday.emsHousePower.maxtime</td>
+      <td style="text-align:right">$week.emsHousePower.max.kilowatt<br/>$week.emsHousePower.maxtime</td>
+      <td style="text-align:right">$month.emsHousePower.max.kilowatt<br/>$month.emsHousePower.maxtime</td>
+      <td style="text-align:right">$year.emsHousePower.max.kilowatt<br/>$year.emsHousePower.maxtime</td>
+    </tr>
+    <tr>
+      <td class="records-header" colspan=6>
+        Energie
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td class="records-header-year">Heute</td>
+      <td class="records-header-alltime">Gestern</td>
+      <td class="records-header-year">Diese Woche</td>
+      <td class="records-header-alltime">Diesen Monat</td>
+      <td class="records-header-year">Dieses Jahr</td>
+    </tr>
+    <tr>
+      <td>PV-Ertrag</td>
+      <td class="leftborder" style="text-align:right">$day.emsSolarPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$yesterday.emsSolarPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$week.emsSolarPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$month.emsSolarPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right"><sup>**)</sup> $year.emsSolarPower.energy_integral.kilowatt_hour</td>
+    </tr>
+    <tr>
+      <td>Sonnenenergie</td>
+      <td class="leftborder" style="text-align:right">$day.radiation.energy_integral.kilowatt_hour_per_meter_squared.format("%.1f")</td>
+      <td style="text-align:right">$yesterday.radiation.energy_integral.kilowatt_hour_per_meter_squared.format("%.1f")</td>
+      <td style="text-align:right">$week.radiation.energy_integral.kilowatt_hour_per_meter_squared.format("%.1f")</td>
+      <td style="text-align:right">$month.radiation.energy_integral.kilowatt_hour_per_meter_squared.format("%.1f")</td>
+      <td style="text-align:right">$year.radiation.energy_integral.kilowatt_hour_per_meter_squared.format("%.1f")</td>
+    </tr>
+    <tr>
+      <td>Netz (Saldo)</td>
+      <td class="leftborder" style="text-align:right">$day.emsGridPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$yesterday.emsGridPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$week.emsGridPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$month.emsGridPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right"><sup>**)</sup> $year.emsGridPower.energy_integral.kilowatt_hour</td>
+    </tr>
+    <tr>
+      <td>Batterie (Saldo)</td>
+      <td class="leftborder" style="text-align:right">$day.emsBatteryPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$yesterday.emsBatteryPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$week.emsBatteryPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$month.emsBatteryPower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right"><sup>**)</sup> $year.emsBatteryPower.energy_integral.kilowatt_hour</td>
+    </tr>
+    <tr>
+      <td>Verbrauch</td>
+      <td class="leftborder" style="text-align:right">$day.emsHousePower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$yesterday.emsHousePower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$week.emsHousePower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$month.emsHousePower.energy_integral.kilowatt_hour</td>
+      <td style="text-align:right">$year.emsHousePower.energy_integral.kilowatt_hour <sup>**)</sup></td>
+    </tr>
+    </tbody>
+  </table>
+  <div><sup>*)</sup> Der Mittelwert wird über die Zeit zwischen Sonnenaufgang und
+  Sonnenuntergang berechnet. Die Nacht bleibt unberücksichtigt.</div>
+  <div><sup>**)</sup> Die Erfassung ist erst seit dem 20.09.2021 in Betrieb. 
+  Der Wert umfaßt also kein volles Kalenderjahr.</div>
+  </div>
+                <div class="clear" style="margin:10px">
+                </div>
+
+  <div class="sm-col-12"><h2 style="text-align:center">Diagramme</h2></div>
+
+                <div class="graphpage-content col-sm-12"></div><!-- JS populated -->
+                
+                <div class="graph-outer"></div><!-- JS populated -->
+                
+                <div class="clear"></div>
+
+                </div>
+
+            </article>
+        </main>
+    </div>
+
+
+    #include "footer.html.tmpl"
+
