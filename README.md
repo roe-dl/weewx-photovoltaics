@@ -65,62 +65,67 @@ pv_binding`
 
 ### Battery storage
 
-Tag | Unit | Alt. Unit
-----|------|----------
-`emsBatteryPower` | W | kW
-`emsBatteryCharge` | % |
-`emsBatteryChargePower` | W | kW
-`emsBatteryDischargePower` | W | kW
-`sumBatteryChargeEnergy` | Wh | kWh
-`sumBatteryDischargeEnergy` | Wh | kWh
+Tag | Unit | Alternative Unit | Description
+----|------|------------------|-----------
+`emsBatteryPower` | W | kW | actual charge (postive) or discharge (negative) power
+`emsBatteryCharge` | % | charge level
+`emsBatteryChargePower` | W | kW | actual charge power
+`emsBatteryDischargePower` | W | kW | actual discharge power
+`sumBatteryChargeEnergy` | Wh | kWh | calculated charge energy
+`sumBatteryDischargeEnergy` | Wh | kWh | calculated discharge energy
 
 ### Supply
 
-Tag | Unit | Alt. Unit
-----|------|----------
-`emsGridPower` | W | kW
-`emsGridInPower` | W | kW
-`emsGridOutPower` | W | kW
-`emsSolarPower` | W | kW
-`emsAddPower` | W | kW
-`sumSolarEnergy` | Wh | kWh
-`sumGridInEnergy` | Wh | kWh
-`sumGridOutEnergy` | Wh | kWh
-`sumAddEnergy` | Wh | kWh
+Tag | Unit | Alternative Unit | Description
+----|------|------------------|----------------
+`emsGridPower` | W | kW | actual grid power, positive values mean consumption
+`emsGridInPower` | W | kW | actual grid power consumed
+`emsGridOutPower` | W | kW | actual power sent to grid
+`emsSolarPower` | W | kW | actual solar production power
+`emsAddPower` | W | kW | actual power of an additional supply
+`sumSolarEnergy` | Wh | kWh | solar energy produced
+`sumGridInEnergy` | Wh | kWh | energy received from grid
+`sumGridOutEnergy` | Wh | kWh | energy sent to grid
+`sumAddEnergy` | Wh | kWh | energy produced by additional supply
 
 ### Consumption
 
-Tag | Unit | Alt. Unit
-----|------|----------
-`emsHousePower` | W | kW
-`emsWallPower` | W | kW
-`emsAutarky` | % |
-`sumHouseEnergy` | Wh | kWh
-`sumWallEnergy` | Wh | kWh
+Tag | Unit | Alternative Unit | Description
+----|------|------------------|------------
+`emsHousePower` | W | kW | inhouse consumption power
+`emsWallPower` | W | kW | wallbox consumption power
+`emsAutarky` | % | | autarky level
+`sumHouseEnergy` | Wh | kWh | calculated inhouse consumption energy
+`sumWallEnergy` | Wh | kWh | calculated wallbox consumption energy
 
 ### Static values
 
-Tag | Unit |
-----|------|
-`installedPVPeakPower` | W
-`installedBatteryCapacity` | Wh
-`pvMaxAcPower` | W
-`pvMaxBatChargePower` | W
-`pvMaxBatDischargePower` | W
+Tag | Unit | Alternative Unit
+----|------|-----------------
+`installedPVPeakPower` | W | kW
+`installedBatteryCapacity` | Wh | kWh
+`pvMaxAcPower` | W | kW
+`pvMaxBatChargePower` | W | kW
+`pvMaxBatDischargePower` | W | kW
 
 ### PM
 
-Tag | Unit |
-----|------|
-`pmGridPowerL1` | W
-`pmGridPowerL2` | W
-`pmGridPowerL3` | W
-`pmGridVoltageL1` | V
-`pmGridVoltageL2` | V
-`pmGridVoltageL3` | V
-`pmGridEnergyL1` | kWh
-`pmGridEnergyL2` | kWh
-`pmGridEnergyL3` | kWh
+Readings of the power meter included in the E3/DC system
+
+Tag | Unit | Description
+----|------|-----------------
+`pmGridPowerL1` | W | actual power at phase L1
+`pmGridPowerL2` | W | actual power at phase L2
+`pmGridPowerL3` | W | actual power at phase L3
+`pmGridVoltageL1` | V  | actual voltage at phase L1
+`pmGridVoltageL2` | V | actual voltage at phase L2
+`pmGridVoltageL3` | V | actual voltage at phase L3
+`pmGridEnergyL1` | kWh | electricity meter at phase L1 *)
+`pmGridEnergyL2` | kWh | electricity meter at phase L2 *)
+`pmGridEnergyL3` | kWh | electricity meter at phase L3 *)
+
+*) upwards counting for getting energy from the grid, downwards counting for
+sending energy into the grid, even negative values are possible
 
 ### myPV ACTHOR
 
@@ -132,13 +137,16 @@ Tag | Unit |
 `heataccuMainsVoltage` | V
 `heataccuMainsCurrent` | A
 
+Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
+bug and announced to remove it with the next release.
+
 ## Database
 
 Readings are saved to `photovoltaics.sdb`
 
 ## MQTT
 
-Reading can be output to MQTT. You need an MQTT broker for that.
+Readings can be output to MQTT. You need an MQTT broker for that.
 
 ## Usage in skins
 

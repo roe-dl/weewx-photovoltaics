@@ -360,13 +360,16 @@ class MyPVThread(BaseThread):
                     connection.close()
                 if reply:
                     x = json.loads(reply)
+                    # temperatures are in 10th of degree Centigrade
+                    # currents are in 10th of amperes
                     for ii in x:
-                        if len(ii)>=4 and ii[0:4]=='temp':
+                        if len(ii)>=4 and ii[0:4] in ('temp','curr'):
                             try:
                                 x[ii] = weeutil.weeutil.to_float(x[ii])/10.0
                             except (ArithmeticError,TypeError,ValueError):
                                 pass
-                    x['time'] = x['unixtime']
+                    # x['time'] = x['unixtime'] # unixtime is bogus
+                    x['time'] = time.time()
                     #loginf(x)
                     self.put_data(x)
                 time.sleep(self.query_interval)
@@ -614,8 +617,9 @@ try:
                                     x[mqtt_key] = val
                         elif queuesource.upper()=='MYPV':
                             # data from ACTHOR
-                            if 'unixtime' in reply:
-                                x['dateTime'] = reply['unixtime']
+                            # Note: unixtime is bogus
+                            if 'time' in reply:
+                                x['dateTime'] = reply['time']
                             for key in MYPV_OBS:
                                 if key in reply:
                                     u = MYPV_OBS[key][1]
