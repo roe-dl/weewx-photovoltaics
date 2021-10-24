@@ -79,13 +79,13 @@ Tag | Unit | Alternative Unit | Description
 Tag | Unit | Alternative Unit | Description
 ----|------|------------------|----------------
 `emsGridPower` | W | kW | actual grid power, positive values mean consumption
-`emsGridInPower` | W | kW | actual grid power consumed
-`emsGridOutPower` | W | kW | actual power sent to grid
+`emsGridPurchasePower` | W | kW | actual grid power purchased
+`emsGridFeedinPower` | W | kW | actual power feeded into grid
 `emsSolarPower` | W | kW | actual solar production power
 `emsAddPower` | W | kW | actual power of an additional supply
 `sumSolarEnergy` | Wh | kWh | solar energy produced
-`sumGridInEnergy` | Wh | kWh | energy received from grid
-`sumGridOutEnergy` | Wh | kWh | energy sent to grid
+`sumGridPurchaseEnergy` | Wh | kWh | energy received from grid
+`sumGridFeedinEnergy` | Wh | kWh | energy sent to grid
 `sumAddEnergy` | Wh | kWh | energy produced by additional supply
 
 ### Consumption

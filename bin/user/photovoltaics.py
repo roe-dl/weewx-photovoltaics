@@ -173,13 +173,13 @@ E3DC_OBS = {
     'sumBatteryDischargeEnergy':('sumBatteryDischargeEnergy','watt_hour','group_energy',ACCUM_SUM),
     # supply
     'production_grid':('emsGridPower','watt','group_power',None),
-    'gridIn':('emsGridInPower','watt','group_power',None),
-    'gridOut':('emsGridOutPower','watt','group_power',None),
+    'gridIn':('emsGridPurchasePower','watt','group_power',None),
+    'gridOut':('emsGridFeedinPower','watt','group_power',None),
     'production_solar':('emsSolarPower','watt','group_power',None),
     'production_add':('emsAddPower','watt','group_power',None),
     'sumSolarEnergy':('sumSolarEnergy','watt_hour','group_energy',ACCUM_SUM),
-    'sumGridInEnergy':('sumGridInEnergy','watt_hour','group_energy',ACCUM_SUM),
-    'sumGridOutEnergy':('sumGridOutEnergy','watt_hour','group_energy',ACCUM_SUM),
+    'sumGridInEnergy':('sumGridPurchaseEnergy','watt_hour','group_energy',ACCUM_SUM),
+    'sumGridOutEnergy':('sumGridFeedinEnergy','watt_hour','group_energy',ACCUM_SUM),
     'sumAddEnergy':('sumAddEnergy','watt_hour','group_energy',ACCUM_SUM),
     # consumption
     'consumption_house':('emsHousePower','watt','group_power',None),
