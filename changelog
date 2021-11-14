@@ -1,0 +1,6 @@
+0.1
+* initial version
+0.2
+* added solarAzimuth, solarAltitude
+* added solarPath (percentage of daytime)
+* bug fixes

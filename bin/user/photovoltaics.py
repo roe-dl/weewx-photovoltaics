@@ -7,12 +7,13 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = 0.1
+VERSION = 0.2
 
 import threading
 import configobj
 import time
 import json
+import sys
 
 from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError
 
@@ -35,6 +36,9 @@ if __name__ != '__main__':
     from weewx.engine import StdService
     import weewx.units
     import weewx.accum
+    import weewx.almanac
+    import weewx.xtypes
+    import weeutil.weeutil
 else:
     # for standalone testing
     import collections
@@ -47,12 +51,26 @@ else:
     class weewx(object):
         NEW_LOOP_PACKET = 1
         NEW_ARCHIVE_RECORD = 2
+        class UnknownType(Exception):
+            pass
+        class UnknownAggregation(Exception):
+            pass
+        class CannotCalculate(Exception):
+            pass
         class units(object):
             def convertStd(p1, p2):
                 return p1
             def convert(p1, p2):
                 return (p1[0],p2,p1[2])
             obs_group_dict = collections.ChainMap()
+            default_unit_label_dict = collections.ChainMap()
+            default_unit_format_dict = collections.ChainMap()
+            class ValueHelper(object):
+                def __init__(self, x):
+                    self.x = x
+                @property
+                def raw(self):
+                    return self.x
         class accum(object):
             accum_dict = collections.ChainMap()
             class Accum(object):
@@ -62,6 +80,23 @@ else:
                     pass
             class OutOfSpan(ValueError):
                 pass
+        class almanac(object):
+            class Almanac(object):
+                def __init__(self, time_ts, lat, lon,
+                 altitude=None,
+                 temperature=None,
+                 pressure=None,
+                 horizon=None,
+                 moon_phases=None,
+                 formatter=None,
+                 converter=None):
+                    pass
+                def sunrise(self):
+                    return weewx.units.ValueHelper(None)
+                def sunset(self):
+                    return weewx.units.ValueHelper(None)
+        class xtypes(object):
+            pass
     class weeutil(object):
         class weeutil(object):
             def to_int(x):
@@ -72,12 +107,19 @@ else:
                 return time.time()
             def TimeSpan(x,y):
                 return (x,y)
+            def startOfDay(x):
+                return x
     class Event(object):
         def __init__(self):
             self.packet = { 'usUnits':16 }
     class Engine(object):
         class stn_info(object):
+            latitude_f = 51.123
+            longitude_f = 13.040
             altitude_vt = (0,'meter','group_altitude')
+        class db_binder(object):
+            def get_manager(binding='wx_binding'):
+                return None
         archive_interval = 300
         class db_binder(object):
             def get_manager(**kvargs):
@@ -161,7 +203,8 @@ except ImportError:
         'unix_epoch': None }
 
 ACCUM_SUM = { 'extractor':'sum' }
-ACCUM_LAST = { 'accumulator':'firstlast','extractor':'last' }
+ACCUM_STRING = { 'accumulator':'firstlast','extractor':'last' }
+ACCUM_LAST = { 'extractor':'last' }
     
 E3DC_OBS = {
     # storage
@@ -227,11 +270,14 @@ sensor, its readings are included here, too.
 """
 
 exclude_from_summary = ['dateTime', 'usUnits', 'interval'] + [
-    E3DC_OBS[e][0] for e in E3DC_OBS if E3DC_OBS[e][3]==ACCUM_LAST ]
+    E3DC_OBS[e][0] for e in E3DC_OBS if E3DC_OBS[e][3]==ACCUM_LAST ] + [
+    'solarAzimuth', 'solarAltitude' ]
     
 table = [('dateTime',             'INTEGER NOT NULL UNIQUE PRIMARY KEY'),
          ('usUnits',              'INTEGER NOT NULL'),
          ('interval',             'INTEGER NOT NULL'),
+         ('solarAzimuth',         'REAL'),
+         ('solarAltitude',        'REAL'),
          ('radiation',            'REAL'),
          ('maxSolarRad',          'REAL')] + [
          (E3DC_OBS[key][0],'REAL') for key in E3DC_OBS] + [
@@ -724,6 +770,49 @@ class E3dcService(StdService):
         else:
             binding_found = None
         self.dbm_init(engine,binding,binding_found)
+        # station altitude
+        try:
+            self.altitude = weewx.units.convert(engine.stn_info.altitude_vt,'meter')[0]
+        except (ValueError,TypeError,IndexError):
+            self.altitude=None
+        loginf("Altitude %s ==> %.0f m" % (engine.stn_info.altitude_vt,self.altitude))
+        # initial value for sunrise, sunset
+        try:
+            alm = weewx.almanac.Almanac(time.time(),
+                                        engine.stn_info.latitude_f,
+                                        engine.stn_info.longitude_f,
+                                        self.altitude)
+            self.sunrise = alm.sunrise
+            self.sunset = alm.sunset
+            loginf("initial sunrise sunset %s %s" % (self.sunrise,self.sunset))
+        except (LookupError,ArithmeticError,AttributeError) as e:
+            logerr("cannot calculate intial sunrise sunset: %s" % e)
+            self.sunrise = None
+            self.sunset = None
+        # helper values for calculating solarAzimuth, solarAltitude
+        try:
+            wx_manager = engine.db_binder.get_manager()
+            timespan = weeutil.weeutil.TimeSpan(weeutil.weeutil.startOfDay(self.sunrise.raw),self.sunrise.raw)
+            val = weewx.xtypes.get_aggregate('outTemp',timespan,'last',wx_manager)
+            self.last_archive_outTemp = weewx.units.convert(val,'degree_C')[0]
+            loginf("initial outTemp %s °C" % self.last_archive_outTemp)
+            val = weewx.xtypes.get_aggregate('pressure',timespan,'last',wx_manager)
+            self.last_archive_pressure = weewx.units.convert(val,'mbar')[0]
+            loginf("initial pressure %s mbar" % self.last_archive_pressure)
+            alm = weewx.almanac.Almanac(self.sunrise.raw,
+                                        engine.stn_info.latitude_f,
+                                        engine.stn_info.longitude_f,
+                                        self.altitude,
+                                        temperature=self.last_archive_outTemp,
+                                        pressure=self.last_archive_pressure)
+            self.sunrise = alm.sunrise
+            self.sunset = alm.sunset
+            loginf("adapted initial sunrise sunset %s %s" % (self.sunrise,self.sunset))
+        except (LookupError,ArithmeticError,AttributeError,weewx.UnknownType, weewx.UnknownAggregation, weewx.CannotCalculate) as e:
+            logerr("cannot determine outTemp and pressure at sunrise time: %s" % e)
+            self.last_archive_outTemp = None   # degree_C
+            self.last_archive_pressure = None  # mbar
+        self.last_almanac_error = time.time()-300
         # create threads to retreive data from devices
         self.threads = dict()
         if 'E3DC' in config_dict:
@@ -827,7 +916,7 @@ class E3dcService(StdService):
                         result[key][0] += val[key]
                         result[key][1] = 1  # without + !!!
                     elif key in result:
-                        if obs_list[key][3]==ACCUM_LAST:
+                        if obs_list[key][3]==ACCUM_LAST or obs_list[key][3]==ACCUM_STRING:
                             result[key][0] = val[key]
                             result[key][1] = 1
                         elif obs_list[key][3]==ACCUM_SUM:
@@ -883,9 +972,22 @@ class E3dcService(StdService):
                 event.packet.update(data)
                 # count records received from the device
                 self.threads[thread_name]['reply_count'] += reply.get('count',(0,None,None))[0]
+        self.almanac(event.packet)
         self.dbm_new_loop_packet(event.packet)
             
     def new_archive_record(self, event):
+        try:
+            val = weewx.units.as_value_tuple(event.record,'outTemp')
+            self.last_archive_outTemp = weewx.units.convert(val,'degree_C')[0]
+            logdbg("outTemp %s °C" % self.last_archive_outTemp)
+        except (LookupError,ArithmeticError,AttributeError):
+            pass 
+        try:
+            val = weewx.units.as_value_tuple(event.record,'pressure')
+            self.last_archive_pressure = weewx.units.convert(val,'mbar')[0]
+            logdbg("pressure %s mbar" % self.last_archive_pressure)
+        except (LookupError,ArithmeticError,AttributeError):
+            pass
         for thread_name in self.threads:
             # log error if we did not receive any data from the device
             if self.log_failure and not self.threads[thread_name]['reply_count']:
@@ -919,7 +1021,7 @@ class E3dcService(StdService):
             except queue.Full:
                 if self.log_failure:
                     logerr("could not send archive record to MQTT thread: timeout waiting for queue to become available")
-            except (ArithmeticError,ValueError,TypeError,LookupError) as e:
+            except (ArithmeticError,ValueError,TypeError,LookupError,AttributeError) as e:
                 if self.log_failure:
                     logerr("could not send archive record to MQTT thread: %s" % e)
         self.dbm_new_archive_record(event.record)
@@ -939,6 +1041,47 @@ class E3dcService(StdService):
                     val = None
                 data[key] = val
         return data
+        
+    def almanac(self, packet):
+        """ calculate solarAzimuth, solarAltitude, solarPath """
+        try:
+            usUnits = packet['usUnits']
+            ts = packet.get('dateTime',time.time())
+            alm = weewx.almanac.Almanac(ts,
+                                        self.engine.stn_info.latitude_f,
+                                        self.engine.stn_info.longitude_f,
+                                        self.altitude,
+                                        temperature=self.last_archive_outTemp,
+                                        pressure=self.last_archive_pressure)
+            almsun = alm.sun
+            packet['solarAzimuth'] = weewx.units.convertStd((almsun.az,'degree_compass','group_direction'),usUnits)[0]
+            packet['solarAltitude'] = weewx.units.convertStd((almsun.alt,'degree_compass','group_direction'),usUnits)[0]
+            # In the morning before sunrise adapt the values of sunrise
+            # and sunset time according to the local temperature and
+            # pressure. After sunrise do not change the values to get
+            # continuous values for solarPath
+            if not self.sunrise or self.sunrise.raw>ts or alm.sunrise.raw>(self.sunrise.raw+43200):
+                self.sunrise = alm.sunrise
+                self.sunset = alm.sunset
+                loginf("sunrise sunset %s %s" % (self.sunrise,self.sunset))
+            # If sunrise and sunset time is available, calculate solarPath
+            # Solar path is here defined as the percentage of the time
+            # elapsed between sunrise and sunset.
+            if self.sunrise and self.sunset:
+                try:
+                    if ts>=self.sunrise.raw and ts<=self.sunset.raw:
+                        packet['solarPath'] = weewx.units.convertStd(((ts-self.sunrise.raw)/(self.sunset.raw-self.sunrise.raw)*100.0,'percent','group_percent'),usUnits)[0]
+                    else:
+                        packet['solarPath'] = None
+                    #loginf("solarPath %s" % packet['solarPath'])
+                except (ArithmeticError,AttributeError) as e:
+                    #logerr(e)
+                    pass
+        except Exception as e:
+            # report the error at most once every 5 minutes
+            if time.time()>=self.last_alamanc_error+300:
+                logerr("almanac error: %s" % e)
+                self.last_almanac_error = time.time()
         
     def dbm_init(self, engine, binding, binding_found):
         self.accumulator = None
@@ -1028,6 +1171,13 @@ class E3dcUnits(StdService):
                 weewx_key = _obs_conf[0]
                 weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
                 log_dict[weewx_key] = _obs_conf[2]
+        if 'ephem' in sys.modules:
+            weewx.units.obs_group_dict['solarAzimuth'] = 'group_direction'
+            weewx.units.obs_group_dict['solarAltitude'] = 'group_direction'
+            weewx.units.obs_group_dict['solarPath'] = 'group_percent'
+            _accum['solarAzimuth'] = ACCUM_LAST
+            _accum['solarAltitude'] = ACCUM_LAST
+            _accum['solarPath'] = ACCUM_LAST
         if _accum:
             loginf("accumulator dict %s" % _accum)
             weewx.accum.accum_dict.maps.append(_accum)

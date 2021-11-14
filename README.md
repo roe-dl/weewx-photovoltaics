@@ -68,7 +68,7 @@ pv_binding`
 Tag | Unit | Alternative Unit | Description
 ----|------|------------------|-----------
 `emsBatteryPower` | W | kW | actual charge (postive) or discharge (negative) power
-`emsBatteryCharge` | % | charge level
+`emsBatteryCharge` | % | | charge level
 `emsBatteryChargePower` | W | kW | actual charge power
 `emsBatteryDischargePower` | W | kW | actual discharge power
 `sumBatteryChargeEnergy` | Wh | kWh | calculated charge energy
@@ -85,7 +85,7 @@ Tag | Unit | Alternative Unit | Description
 `emsAddPower` | W | kW | actual power of an additional supply
 `sumSolarEnergy` | Wh | kWh | solar energy produced
 `sumGridPurchaseEnergy` | Wh | kWh | energy received from grid
-`sumGridFeedinEnergy` | Wh | kWh | energy sent to grid
+`sumGridFeedinEnergy` | Wh | kWh | energy feeded into grid
 `sumAddEnergy` | Wh | kWh | energy produced by additional supply
 
 ### Consumption
@@ -125,7 +125,7 @@ Tag | Unit | Description
 `pmGridEnergyL3` | kWh | electricity meter at phase L3 *)
 
 *) upwards counting for getting energy from the grid, downwards counting for
-sending energy into the grid, even negative values are possible
+feeding energy into the grid, even negative values are possible
 
 ### myPV ACTHOR
 
@@ -139,6 +139,26 @@ Tag | Unit |
 
 Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
 bug and announced to remove it with the next release.
+
+### Sun
+
+Tag | Unit | Description
+----|------|------------
+`solarAzimuth` | ° | solar azimuth (compass direction of the sun)
+`solarAltitude` | ° | solar altitude
+`solarPath` | % | percentage of the time elapsed between sunrise and sunset
+
+What is the difference between `solarAzimuth`, `solarAltitude` and 
+`$almanac.sun.az`, `$almanac.sun.alt`?
+
+* `solarAzimuth` and `solarAltitude` are output to MQTT and thus allow
+  live updates on web sites.
+* As `solarAzimuth` and `solarAltitude` are observation types, they
+  can be saved to the database (as they indeed are) and displayed
+  in diagrams.
+
+The values are calculated by the `Almanac` class that provides the
+`$almanac` tag.
 
 ## Database
 
