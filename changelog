@@ -4,3 +4,5 @@
 * added solarAzimuth, solarAltitude
 * added solarPath (percentage of daytime)
 * bug fixes
+0.2.1
+* bug fix for MQTT output

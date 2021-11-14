@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = 0.2
+VERSION = "0.2.1"
 
 import threading
 import configobj
@@ -256,7 +256,10 @@ MYPV_OBS = {
     'curr_mains':('heataccuMainsCurrent','amp','group_amp',None)
     }
 
-WX_OBS = ['dateTime','interval','radiation','maxSolarRad']
+WX_OBS = [
+    'dateTime','interval',
+    'radiation','maxSolarRad',
+    'solarAzimuth','solarAltitude','solarPath']
 
 ##############################################################################
 #    Database schema                                                         #
@@ -271,13 +274,14 @@ sensor, its readings are included here, too.
 
 exclude_from_summary = ['dateTime', 'usUnits', 'interval'] + [
     E3DC_OBS[e][0] for e in E3DC_OBS if E3DC_OBS[e][3]==ACCUM_LAST ] + [
-    'solarAzimuth', 'solarAltitude' ]
+    'solarAzimuth', 'solarAltitude', 'solarPath' ]
     
 table = [('dateTime',             'INTEGER NOT NULL UNIQUE PRIMARY KEY'),
          ('usUnits',              'INTEGER NOT NULL'),
          ('interval',             'INTEGER NOT NULL'),
          ('solarAzimuth',         'REAL'),
          ('solarAltitude',        'REAL'),
+         ('solarPath',            'REAL'),
          ('radiation',            'REAL'),
          ('maxSolarRad',          'REAL')] + [
          (E3DC_OBS[key][0],'REAL') for key in E3DC_OBS] + [
@@ -678,7 +682,7 @@ try:
                                     val = reply[key]
                                     x[mqtt_key] = val
                         else:
-                            # data from WeeWX archive record
+                            # data from WeeWX archive record or loop packet
                             for key in self.wx_obs_list:
                                 if key in reply:
                                     if key=='dateTime':
@@ -974,6 +978,24 @@ class E3dcService(StdService):
                 self.threads[thread_name]['reply_count'] += reply.get('count',(0,None,None))[0]
         self.almanac(event.packet)
         self.dbm_new_loop_packet(event.packet)
+        if has_mqtt and self.mqtt_queue and self.mqtt_thread:
+            try:
+                record_m = weewx.units.to_std_system(event.packet,weewx.METRICWX)
+                topics = dict()
+                for ii in self.threads:
+                    topic = self.threads[ii]['topic']
+                    if topic: topics.update({topic:True})
+                obs_list = ('dateTime','usUnits','radiation','maxSolarRad','solarAzimuth','solarAltitude','solarPath')
+                x = dict()
+                for ii in obs_list:
+                    if ii in record_m: x[ii] = record_m[ii]
+                for ii in topics:
+                    if topics[ii]:
+                        self.mqtt_queue.put(
+                            (ii,x,'new_loop_packet'),
+                            timeout=1.0)
+            except Exception:
+                pass
             
     def new_archive_record(self, event):
         try:
@@ -1007,7 +1029,7 @@ class E3dcService(StdService):
                 if len(topics)==1:
                     obs_list = [ii[0] for ii in schema['table']]
                 else:
-                    obs_list = ('dateTime','interval','usUnits','radiation','maxSolarRad')
+                    obs_list = ('dateTime','interval','usUnits','radiation','maxSolarRad','solarAzimuth','solarAltitude','solarPath')
                 x = dict()
                 for ii in obs_list:
                     if ii in record_m: x[ii] = record_m[ii]

@@ -149,7 +149,7 @@ Tag | Unit | Description
 `solarPath` | % | percentage of the time elapsed between sunrise and sunset
 
 What is the difference between `solarAzimuth`, `solarAltitude` and 
-`$almanac.sun.az`, `$almanac.sun.alt`?
+`$almanac.sun.az`, `$almanac.sun.alt`, respectively?
 
 * `solarAzimuth` and `solarAltitude` are output to MQTT and thus allow
   live updates on web sites.
@@ -159,6 +159,8 @@ What is the difference between `solarAzimuth`, `solarAltitude` and
 
 The values are calculated by the `Almanac` class that provides the
 `$almanac` tag.
+
+All those values honour temperature (`outTemp`) and pressure (`pressure`).
 
 ## Database
 
