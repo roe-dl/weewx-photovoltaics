@@ -228,8 +228,8 @@ Repeat those definitions with `week`, `month`, and `year`
 
 To show those diagrams add the appropriate img tags in a template:
 ```
-&lt;img src="dayPV.png" /&gt;
-&lt;img src="dayPVcharge.png /&gt;
+<img src="dayPV.png" />
+<img src="dayPVcharge.png />
 ```
 
 ### Belchertown skin
