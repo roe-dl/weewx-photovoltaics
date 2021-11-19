@@ -172,6 +172,66 @@ Readings can be output to MQTT. You need an MQTT broker for that.
 
 ## Usage in skins
 
+### Display values (CheetahGenerator)
+
+The observeration types described above can be used as any observation
+type in WeeWX.
+
+Examples:
+```
+$urrent.emsBatteryPower
+$day.emsGridPower.max
+$week.sumSolarEnergy.sum
+$month.emsHousePoser.energy_integral
+```
+
+To get the energy for a time span, there are two ways:
+
+* observation types `sum...Energy` together with aggregation type `sum`
+* observation types `ems...Power` together with aggregation type
+  `energy_integral`
+
+The latter of them two requires the weewx-GTS extension to be installed.
+
+Please note: The `sum...Energy` observation types integrate the respective
+power over the archive interval. That results in a higher accuracy
+than the E3/DC display shows, as there 15 minutes averages are used
+for calculation. And it results in little differences in the readings.
+
+### Diagrams (ImageGenerator)
+
+in `skin.conf`:
+```
+[ImageGenerator]
+    ...
+    [[day_images]]
+        ...
+        [[[dayPV]]]
+            data_binding = pv_binding
+            [[[[emsSolarPower]]]]
+                label = Sonne
+                color = "#ffc83f"
+            [[[[emsGridPower]]]]
+                label = Netz
+            [[[[emsBatteryPower]]]]
+                label = Batterie
+            [[[[emsHousePower]]]]
+                label = Verbrauch
+
+        [[[dayPVcharge]]]
+            data_binding = pv_binding
+            yscale = 0,100,10
+            [[[[emsBatteryCharge]]]]
+                label = Ladestand der Batterie
+```
+Repeat those definitions with `week`, `month`, and `year`
+
+To show those diagrams add the appropriate img tags in a template:
+```
+&lt;img src="dayPV.png" /&gt;
+&lt;img src="dayPVcharge.png /&gt;
+```
+
 ### Belchertown skin
 
 Example, what to add to `graphs.conf`:
@@ -271,6 +331,32 @@ PV page with live update of solar power by MQTT. Please note: The
 example assumes the readings to be stored in weewx.sdb rather than
 photovoltaics.sdb. So add `data_binding = pv_binding` to change
 that if necessary.
+
+To show a diagram about solar course you could use the following configuration:
+```
+    [[sunpath]]
+        time_length = 172800
+        title = "Sonnenstand"
+        yAxis_label = Winkel
+        [[[solarPath]]]
+            zIndex = 2
+            yAxis = 1
+            yAxis_min = -25
+            yAxis_max = 100
+            yAxis_tickInterval = 25
+            yAxis_label = "Zeit (%)"
+        [[[solarAzimuth]]]
+            yAxis = 0
+            yAxis_min = -90
+            yAxis_max = 360
+            yAxis_tickInterval = 90
+        [[[solarAltitude]]]
+            yAxis = 0
+            yAxis_min = -90
+            yAxis_max = 360
+            yAxis_tickInterval = 90
+```
+
 
 ## Links
 
