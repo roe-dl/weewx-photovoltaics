@@ -6,3 +6,7 @@
 * bug fixes
 0.2.1
 * bug fix for MQTT output
+0.3
+* read power_ac9 instead of power_act for 9s
+* replace loginf() by logerr() for errors
+* fix bug that may cause thread exit

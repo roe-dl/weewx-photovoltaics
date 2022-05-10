@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.2.1"
+VERSION = "0.3"
 
 import threading
 import configobj
@@ -380,13 +380,52 @@ class MyPVThread(BaseThread):
         self.query_interval = weeutil.weeutil.to_float(query_interval)
         self.mqtt_queue = mqtt_queue
         self.mqtt_topic = mqtt_topic
+        self.acthor9s = None
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
+        
+    def read_device_config(self):
+        """ read config out of device """
+        loginf("thread '%s', host '%s': read device config" % (self.name,self.address))
+        reply = None
+        try:
+            connection = http.client.HTTPConnection(self.address)
+            connection.request('GET','/setup.jsn')
+            response = connection.getresponse()
+            if response.status==200:
+                reply = response.read()
+            else:
+                logerr("thread '%s', host '%s': Status %s - %s" % (self.name,self.address,response.status,response.reason))
+        except http.client.HTTPException as e:
+            logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+        except OSError as e:
+            loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+        finally:
+            connection.close()
+        if reply:
+            x = json.loads(reply)
+            loginf("thread '%s', host '%s': S/N %s" % (self.name,self.address,x.get('serialno','unknown')))
+            # value: 1 for AC-THOR, 2 for AC-THOR 9s
+            self.acthor9s = x.get('acthor9s')
+            try:
+                self.acthor9s = weeutil.weeutil.to_int(self.acthor9s)
+            except Exception:
+                pass
+            loginf("thread '%s', host '%s': type %s - %s" % (self.name,self.address,self.acthor9s,'AC-THOR'))
+            if self.acthor9s==1:
+                # AC-THOR --> MYPV_OBS already contains the right key
+                pass
+            elif self.acthor9s==2:
+                # AC-THOR 9s --> replace 'power_act' by 'power_ac9'
+                MYPV_OBS['power_ac9'] = MYPV_OBS.pop('power_act')
+
 
     def run(self):
+        self.read_device_config()
         loginf("thread '%s', host '%s': starting" % (self.name,self.address))
         try:
             last_status = 0
             while self.running:
+                reply = None
                 try:
                     connection = http.client.HTTPConnection(self.address)
                     connection.request('GET','/data.jsn')
@@ -396,15 +435,13 @@ class MyPVThread(BaseThread):
                         loginf("thread '%s', host '%s': Status %s - %s" % (self.name,self.address,response.status,response.reason))
                     if response.status==200:
                         reply = response.read()
-                    else:
-                        reply = None
                 except http.client.HTTPException as e:
                     if last_status!=11111:
-                        loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+                        logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
                     last_status = 11111
                 except OSError as e:
                     if last_status!=22222:
-                        loginf("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+                        logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
                     last_status = 22222
                 finally:
                     connection.close()
@@ -1085,7 +1122,7 @@ class E3dcService(StdService):
             if not self.sunrise or self.sunrise.raw>ts or alm.sunrise.raw>(self.sunrise.raw+43200):
                 self.sunrise = alm.sunrise
                 self.sunset = alm.sunset
-                loginf("sunrise sunset %s %s" % (self.sunrise,self.sunset))
+                #loginf("sunrise sunset %s %s" % (self.sunrise,self.sunset))
             # If sunrise and sunset time is available, calculate solarPath
             # Solar path is here defined as the percentage of the time
             # elapsed between sunrise and sunset.
