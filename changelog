@@ -10,3 +10,5 @@
 * read power_ac9 instead of power_act for 9s
 * replace loginf() by logerr() for errors
 * fix bug that may cause thread exit
+0.4
+* self-consumption

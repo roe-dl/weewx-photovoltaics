@@ -10,8 +10,8 @@ pip install pye3dc
 
 ## Installation instructions
 
-By now there is no installation script. Copy `photovoltaics.py` to the 
-user directory of WeeWX and edit `weewx.conf` as follows:
+Copy `photovoltaics.py` to the user directory of WeeWX and 
+edit `weewx.conf` as follows:
 
 ```
 [DataBindings]
@@ -55,6 +55,11 @@ user directory of WeeWX and edit `weewx.conf` as follows:
 
 Restart WeeWX.
 
+There is an installer in the base directory, but it is alpha and untested.
+Use it on your own risk. Make a backup of WeeWX before using the installer.
+If you are not sure, copy photovoltaics.py to the user directory of WeeWX
+manually, and also edit weewx.conf manually.
+
 ## Oberservation types
 
 This extension provides several additional observation types
@@ -94,9 +99,11 @@ Tag | Unit | Alternative Unit | Description
 ----|------|------------------|------------
 `emsHousePower` | W | kW | inhouse consumption power
 `emsWallPower` | W | kW | wallbox consumption power
+`emsSelfConsumptionPower` | W | kW | self-consumption power
 `emsAutarky` | % | | autarky level
 `sumHouseEnergy` | Wh | kWh | calculated inhouse consumption energy
 `sumWallEnergy` | Wh | kWh | calculated wallbox consumption energy
+`sumSelfConsumptionEnergy` | Wh | kWh | self-consumption energy
 
 ### Static values
 
