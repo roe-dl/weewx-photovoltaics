@@ -99,11 +99,10 @@ Tag | Unit | Alternative Unit | Description
 ----|------|------------------|------------
 `emsHousePower` | W | kW | inhouse consumption power
 `emsWallPower` | W | kW | wallbox consumption power
-`emsSelfConsumptionPower` | W | kW | self-consumption power
+`emsSelfConsumption` | % | | self-consumption level
 `emsAutarky` | % | | autarky level
 `sumHouseEnergy` | Wh | kWh | calculated inhouse consumption energy
 `sumWallEnergy` | Wh | kWh | calculated wallbox consumption energy
-`sumSelfConsumptionEnergy` | Wh | kWh | self-consumption energy
 
 ### Static values
 

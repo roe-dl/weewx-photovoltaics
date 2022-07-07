@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.4"
+VERSION = "0.4.1"
 
 import threading
 import configobj
@@ -227,11 +227,10 @@ E3DC_OBS = {
     # consumption
     'consumption_house':('emsHousePower','watt','group_power',None),
     'consumption_wallbox':('emsWallPower','watt','group_power',None),
-    'selfConsumption':('emsSelfConsumptionPower','watt','group_power',None),
+    'selfConsumption':('emsSelfConsumption','percent','group_percent',None),
     'autarky':('emsAutarky','percent','group_percent',None),
     'sumHouseEnergy':('sumHouseEnergy','watt_hour','group_energy',ACCUM_SUM),
     'sumWallEnergy':('sumWallEnergy','watt_hour','group_energy',ACCUM_SUM),
-    'sumSelfConsumptionEnergy':('sumSelfConsumptionEnergy','watt_hour','group_energy',ACCUM_SUM),
     # static values
     'installedPeakPower':('installedPVPeakPower','watt','group_power',None),
     'installedBatteryCapacity':('installedBatteryCapacity','watt_hour','group_energy',None),
@@ -605,10 +604,6 @@ class E3dcThread(BaseThread):
                         x['sumSolarEnergy'] = x['production_solar'] * since_last
                         x['sumHouseEnergy'] = x['consumption_house'] * since_last
                         x['sumWallEnergy'] = x['consumption_wall'] * since_last
-                    except (ArithmeticError,ValueError,TypeError,LookupError):
-                        pass
-                    try:
-                        x['sumSelfConsumptionEnergy'] = x['selfConsumption'] * since_last
                     except (ArithmeticError,ValueError,TypeError,LookupError):
                         pass
                 # add static values
