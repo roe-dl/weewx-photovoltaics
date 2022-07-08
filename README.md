@@ -185,10 +185,10 @@ type in WeeWX.
 
 Examples:
 ```
-$urrent.emsBatteryPower
-$day.emsGridPower.max
-$week.sumSolarEnergy.sum
-$month.emsHousePoser.energy_integral
+$current.emsBatteryPower
+$day($data_binding='pv_binding').emsGridPower.max
+$week($data_binding='pv_binding').sumSolarEnergy.sum
+$month($data_binding='pv_binding').emsHousePower.energy_integral
 ```
 
 To get the energy for a time span, there are two ways:
