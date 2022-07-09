@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.4.1"
+VERSION = "0.5"
 
 import threading
 import configobj
@@ -191,6 +191,64 @@ class WxE3DC(E3DC):
         
         return x
 
+    def get_PVI_AC_data(self, pviIndex, phase, keepAlive=False):
+        req = self.sendRequest(
+            (
+                "PVI_REQ_DATA",
+                "Container",
+                [
+                        ("PVI_INDEX", "Uint16", pviIndex),
+                        ("PVI_REQ_AC_POWER", "Uint16", phase),
+                        ("PVI_REQ_AC_VOLTAGE", "Uint16", phase),
+                        ("PVI_REQ_AC_CURRENT", "Uint16", phase),
+                        ("PVI_REQ_AC_APPARENTPOWER", "Uint16", phase),
+                        ("PVI_REQ_AC_REACTIVEPOWER", "Uint16", phase),
+                        ("PVI_REQ_AC_ENERGY_ALL", "Uint16", phase),
+                        ("PVI_REQ_AC_ENERGY_GRID_CONSUMPTION", "Uint16", phase),
+                ],
+            ),
+            keepAlive,
+        )
+        return {
+          'PVI_AC_POWER': rscpFindTag(rscpFindTag(req, "PVI_AC_POWER"), "PVI_VALUE")[2],
+          'PVI_AC_VOLTAGE': rscpFindTag(rscpFindTag(req, "PVI_AC_VOLTAGE"), "PVI_VALUE")[2], 
+          'PVI_AC_CURRENT': rscpFindTag(rscpFindTag(req, "PVI_AC_CURRENT"), "PVI_VALUE")[2],
+          'PVI_AC_APPARENTPOWER': rscpFindTag(rscpFindTag(req, "PVI_AC_APPARENTPOWER"), "PVI_VALUE")[2],
+          'PVI_AC_REACTIVEPOWER': rscpFindTag(
+                        rscpFindTag(req, "PVI_AC_REACTIVEPOWER"), "PVI_VALUE"
+                    )[2],
+          'PVI_AC_ENERGY_ALL': rscpFindTag(
+                        rscpFindTag(req, "PVI_AC_ENERGY_ALL"), "PVI_VALUE"
+                    )[2],
+          'PVI_AC_ENERGY_GRID_CONSUMPTION': rscpFindTag(
+                        rscpFindTag(req, "PVI_AC_ENERGY_GRID_CONSUMPTION"), "PVI_VALUE"
+                    )[2]
+          }
+    
+    def get_PVI_DC_data(self, pviIndex, string, keepAlive=False):
+        req = self.sendRequest(
+            (
+                "PVI_REQ_DATA",
+                "Container",
+                [
+                        ("PVI_INDEX", "Uint16", pviIndex),
+                        ("PVI_REQ_DC_POWER", "Uint16", string),
+                        ("PVI_REQ_DC_VOLTAGE", "Uint16", string),
+                        ("PVI_REQ_DC_CURRENT", "Uint16", string),
+                        ("PVI_REQ_DC_STRING_ENERGY_ALL", "Uint16", string),
+                ],
+            ),
+            keepAlive
+        )
+        return {
+            'PVI_DC_POWER': rscpFindTag(rscpFindTag(req, "PVI_DC_POWER"), "PVI_VALUE")[2],
+            'PVI_DC_VOLTAGE': rscpFindTag(rscpFindTag(req, "PVI_DC_VOLTAGE"), "PVI_VALUE")[2],
+            'PVI_DC_CURRENT': rscpFindTag(rscpFindTag(req, "PVI_DC_CURRENT"), "PVI_VALUE")[2],
+            'PVI_DC_ENERGY_ALL': rscpFindTag(
+                        rscpFindTag(req, "PVI_DC_STRING_ENERGY_ALL"), "PVI_VALUE"
+                    )[2]
+        }
+    
 
 # unit labels for optional MQTT output
 try:
@@ -231,6 +289,8 @@ E3DC_OBS = {
     'autarky':('emsAutarky','percent','group_percent',None),
     'sumHouseEnergy':('sumHouseEnergy','watt_hour','group_energy',ACCUM_SUM),
     'sumWallEnergy':('sumWallEnergy','watt_hour','group_energy',ACCUM_SUM),
+    # balance
+    'balance':('emsBalance','watt','group_power',None),
     # static values
     'installedPeakPower':('installedPVPeakPower','watt','group_power',None),
     'installedBatteryCapacity':('installedBatteryCapacity','watt_hour','group_energy',None),
@@ -246,7 +306,39 @@ E3DC_OBS = {
     'PM_6_VOLTAGE_L3':('pmGridVoltageL3','volt','group_volt',None),
     'PM_6_ENERGY_L1':('pmGridEnergyL1','watt_hour','group_energy',ACCUM_LAST),
     'PM_6_ENERGY_L2':('pmGridEnergyL2','watt_hour','group_energy',ACCUM_LAST),
-    'PM_6_ENERGY_L3':('pmGridEnergyL3','watt_hour','group_energy',ACCUM_LAST)
+    'PM_6_ENERGY_L3':('pmGridEnergyL3','watt_hour','group_energy',ACCUM_LAST),
+    # PVI
+    'PVI_DC_VOLTAGE_T0':('pviDCvoltageT0','volt','group_volt',None),
+    'PVI_DC_CURRENT_T0':('pviDCcurrentT0','amp','group_amp',None),
+    'PVI_DC_POWER_T0':('pviDCpowerT0','watt','group_power',None),
+    'PVI_DC_ENERGY_ALL_T0':('pviDCenergyT0','watt_hour','group_energy',ACCUM_LAST),
+
+    'PVI_DC_VOLTAGE_T1':('pviDCvoltageT1','volt','group_volt',None),
+    'PVI_DC_CURRENT_T1':('pviDCcurrentT1','amp','group_amp',None),
+    'PVI_DC_POWER_T1':('pviDCpowerT1','watt','group_power',None),
+    'PVI_DC_ENERTY_ALL_T1':('pviDCenergyT1','watt_hour','group_energy',ACCUM_LAST),
+
+    'PVI_AC_APPARENTPOWER_L1':('pviACapparentPowerL1','watt','group_power',None),
+    'PVI_AC_POWER_L1':('pviACpowerL1','watt','group_power',None),
+    'PVI_AC_REACTIVEPOWER_L1':('pviACreactivePowerL1','watt','group_power',None),
+    'PVI_AC_VOLTAGE_L1':('pviACvoltageL1','volt','group_volt',None),
+    'PVI_AC_CURRENT_L1':('pviACcurrentL1','amp','group_amp',None),
+    'PVI_AC_ENERGY_ALL_L1':('pviACenergyL1','watt_hour','group_energy',ACCUM_LAST),
+
+    'PVI_AC_APPARENTPOWER_L2':('pviACapparentPowerL2','watt','group_power',None),
+    'PVI_AC_POWER_L2':('pviACpowerL2','watt','group_power',None),
+    'PVI_AC_REACTIVEPOWER_L2':('pviACreactivePowerL2','watt','group_power',None),
+    'PVI_AC_VOLTAGE_L2':('pviACvoltageL2','volt','group_volt',None),
+    'PVI_AC_CURRENT_L2':('pviACcurrentL2','amp','group_amp',None),
+    'PVI_AC_ENERGY_ALL_L2':('pviACenergyL2','watt_hour','group_energy',ACCUM_LAST),
+
+    'PVI_AC_APPARENTPOWER_L3':('pviACapparentPowerL3','watt','group_power',None),
+    'PVI_AC_POWER_L3':('pviACpowerL3','watt','group_power',None),
+    'PVI_AC_REACTIVEPOWER_L3':('pviACreactivePowerL3','watt','group_power',None),
+    'PVI_AC_VOLTAGE_L3':('pviACvoltageL3','volt','group_volt',None),
+    'PVI_AC_CURRENT_L3':('pviACcurrentL3','amp','group_amp',None),
+    'PVI_AC_ENERGY_ALL_L3':('pviACenergyL3','watt_hour','group_energy',ACCUM_LAST),
+
     }
 
 MYPV_OBS = {
@@ -524,6 +616,10 @@ class E3dcThread(BaseThread):
                     result2 = connection.get_PM_data(6)
                 except (AuthenticationError,CommunicationError,Exception):
                     result2 = {}
+                try:
+                    result3 = self.get_pvi_data(connection)
+                except (AuthenticationError,CommunicationError,Exception):
+                    result3 = {}
                 #loginf("run %s" % result)
                 err_ct = 0
                 # flatten the result dict
@@ -560,6 +656,8 @@ class E3dcThread(BaseThread):
                     x.update(result2)
                 except Exception:
                     pass
+                # result3 PVI
+                x.update(result3)
                 # calculate time period since last record
                 if last_ts>0:
                     try:
@@ -599,6 +697,17 @@ class E3dcThread(BaseThread):
                         x['sumGridOutEnergy'] = grid_out * since_last
                 except (ArithmeticError,ValueError,TypeError,LookupError):
                     pass
+                # should be always 0.0
+                try:
+                    x['balance'] = (x['consumption_battery'] 
+                                   + x['consumption_house']
+                                   + x['consumption_wallbox']
+                                   - x['production_grid']
+                                   - x['production_solar']
+                                   - x['production_add'])
+                except (ArithmeticError,ValueError,TypeError,LookupError):
+                    pass
+                # calculate energy out of power and time
                 if since_last:
                     try:
                         x['sumSolarEnergy'] = x['production_solar'] * since_last
@@ -628,6 +737,50 @@ class E3dcThread(BaseThread):
             logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
         finally:
             loginf("thread '%s', host '%s' stopped" % (self.name,self.address))
+    
+    def get_pvi_data(self, connection):
+        """ 
+            AC:
+                AC_MAX_PHASE_COUNT
+                
+                Value der Anfrage beinhaltet die angefragte Phase
+                
+                AC_MAX_POWER, AC_POWER, AC_VOLTAGE, AC_CURRENT,
+                AC_APPARENTPOWER, AC_REACTIVE_POWER, AC_ENERGY_ALL,
+                AC_MAX_APPARENTPOWER, AC_ENERGY_DAY,
+                AC_ENERGY_GRID_CONSUMPTION
+            
+            DC:
+                DC_MAX_STRING_COUNT
+                
+                DC_POWER, DC_VOLTAGE, DC_CURRENT, DC_MAX_POWER,
+                DC_MIN_VOLTAGE, DC_MAX_CURRENT, DC_MIN_CURRENT,
+                DC_STRING_ENERGY_ALL
+                
+        """
+        pviIndex = 0
+        x = dict()
+        """
+        for tracker in range(0,2):
+            pvi = connection.get_pvi_data(pviTracker=tracker,keepAlive=True)
+            if pvi:
+                for key in pvi:
+                    trs = str(pvi['pviTracker'])
+                    if key not in ['stringIndex','pviTracker']:
+                        x['pvi'+trs+key] = pvi[key]
+        """
+        for tracker in range(0,2):
+            tracker_name = 'T'+str(tracker)
+            dc_data = connection.get_PVI_DC_data(pviIndex,tracker,keepAlive=True)
+            for key in dc_data:
+                x[key+'_'+tracker_name] = dc_data[key]
+        for phase in range(0,3):
+            phase_name = 'L'+str(phase+1)
+            ac_data = connection.get_PVI_AC_data(pviIndex,phase,keepAlive=True)
+            for key in ac_data:
+                x[key+'_'+phase_name] = ac_data[key]
+        print(x)
+        return x
     
 
 ##############################################################################
@@ -1139,7 +1292,7 @@ class E3dcService(StdService):
                     pass
         except Exception as e:
             # report the error at most once every 5 minutes
-            if time.time()>=self.last_alamanc_error+300:
+            if time.time()>=self.last_almanac_error+300:
                 logerr("almanac error: %s" % e)
                 self.last_almanac_error = time.time()
         

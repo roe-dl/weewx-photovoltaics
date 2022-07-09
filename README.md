@@ -133,6 +133,47 @@ Tag | Unit | Description
 *) upwards counting for getting energy from the grid, downwards counting for
 feeding energy into the grid, even negative values are possible
 
+### PVI DC
+
+solar tracker readings 
+
+Tag | Unit | Description
+----|------|-----------------
+`pviDCpowerT0` | W | actual power of tracker 1
+`pviDCpowerT1` | W | actual power of tracker 2
+`pviDCvoltageT0` | V | actual voltage of tracker 1
+`pviDCvoltageT1` | V | actual voltage of tracker 2
+`pviDCcurrentT0` | A | actual current of tracker 1
+`pviDCcurrentT1` | A | actual current of tracker 2
+`pviDCenergyT0` | Wh | earned energy so far for tracker 1
+`pviDCenergyT1` | Wh | earned energy so far for tracker 2
+
+### PVI AC
+
+PV inverter AC output
+
+Tag | Unit | Description
+----|------|-----------------
+`pviACpowerL1` | W | AC power L1
+`pviACpowerL2` | W | AC power L2
+`pviACpowerL3` | W | AC power L3
+`pviACapparentPowerL1` | VA | AC apparent power L1
+`pviACapparentPowerL2` | VA | AC apparent power L2
+`pviACapparentPowerL3` | VA | AC apparent power L3
+`pviACreactivePowerL1` | var | AC reactive power L1
+`pviACreactivePowerL2` | var | AC reactive power L2
+`pviACreactivePowerL3` | var | AC reactive power L3
+`pviACvoltageL1` | V | AC voltage L1
+`pviACvoltageL2` | V | AC voltage L2
+`pviACvoltageL3` | V | AC voltage L3
+`pviACcurrentL1` | A | AC current L1
+`pviACcurrentL2` | A | AC current L2
+`pviACcurrentL3` | A | AC current L3
+`pviACenergyL1 | Wh | energy L1
+`pviACenergyL2 | Wh | energy L2
+`pviACenergyL3 | Wh | energy L3
+
+
 ### myPV ACTHOR
 
 Tag | Unit |
