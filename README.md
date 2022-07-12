@@ -169,9 +169,9 @@ Tag | Unit | Description
 `pviACcurrentL1` | A | AC current L1
 `pviACcurrentL2` | A | AC current L2
 `pviACcurrentL3` | A | AC current L3
-`pviACenergyL1 | Wh | energy L1
-`pviACenergyL2 | Wh | energy L2
-`pviACenergyL3 | Wh | energy L3
+`pviACenergyL1` | Wh | energy L1
+`pviACenergyL2` | Wh | energy L2
+`pviACenergyL3` | Wh | energy L3
 
 
 ### myPV ACTHOR
