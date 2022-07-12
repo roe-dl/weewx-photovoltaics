@@ -2,6 +2,10 @@
 
 Extension to WeeWX for processing data of the photovoltaics system E3/DC
 
+Display example:
+
+<p align="center"><img src="example-display-800.png" /></p>
+
 ## Prerequisites
 
 ```
