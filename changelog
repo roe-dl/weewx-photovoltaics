@@ -12,3 +12,9 @@
 * fix bug that may cause thread exit
 0.4
 * self-consumption
+0.4.1
+* self-consumption is percentage not power
+0.5
+* PV inverter readings
+0.6
+* observation type heataccuMainsFrequency

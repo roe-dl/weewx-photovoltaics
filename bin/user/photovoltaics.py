@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.5"
+VERSION = "0.6"
 
 import threading
 import configobj
@@ -346,7 +346,8 @@ MYPV_OBS = {
     'volt_out':('heataccuVoltage','volt','group_volt',None),
     'power_act':('heataccuPower','watt','group_power',None),
     'volt_mains':('heataccuMainsVoltage','volt','group_volt',None),
-    'curr_mains':('heataccuMainsCurrent','amp','group_amp',None)
+    'curr_mains':('heataccuMainsCurrent','amp','group_amp',None),
+    'freq':('heataccuMainsFrequency','hertz','group_frequency',None)
     }
 
 WX_OBS = [
@@ -546,6 +547,11 @@ class MyPVThread(BaseThread):
                         if len(ii)>=4 and ii[0:4] in ('temp','curr'):
                             try:
                                 x[ii] = weeutil.weeutil.to_float(x[ii])/10.0
+                            except (ArithmeticError,TypeError,ValueError):
+                                pass
+                        if ii=='freq':
+                            try:
+                                x[ii] = weeutil.weeutil.to_float(x[ii])/1000.0
                             except (ArithmeticError,TypeError,ValueError):
                                 pass
                     # x['time'] = x['unixtime'] # unixtime is bogus
@@ -779,7 +785,7 @@ class E3dcThread(BaseThread):
             ac_data = connection.get_PVI_AC_data(pviIndex,phase,keepAlive=True)
             for key in ac_data:
                 x[key+'_'+phase_name] = ac_data[key]
-        print(x)
+        #print(x)
         return x
     
 
@@ -1363,8 +1369,16 @@ class E3dcUnits(StdService):
 
     def __init__(self, engine, config_dict):
         super(E3dcUnits,self).__init__(engine, config_dict)
+        # unit kilowatt
         weewx.units.default_unit_label_dict.setdefault('kilowatt',u" kW")
         weewx.units.default_unit_format_dict.setdefault('kilowatt',"%.1f") 
+        # group_frequency and unit hertz
+        weewx.units.default_unit_label_dict.setdefault('hertz',u" Hz")
+        weewx.units.default_unit_format_dict.setdefault('hertz',"%.3f")
+        if __name__ != '__main__':
+            for ii in weewx.units.std_groups:
+                weewx.units.std_groups[ii].setdefault('group_frequency','hertz')
+        # augment groups dict by the PV observation types
         self._augment_obs_group_dict()
         
     def _augment_obs_group_dict(self):

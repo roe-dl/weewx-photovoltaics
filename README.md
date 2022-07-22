@@ -187,6 +187,7 @@ Tag | Unit |
 `heataccuPower` | W
 `heataccuMainsVoltage` | V
 `heataccuMainsCurrent` | A
+`heataccuMainsFrequency` | Hz
 
 Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
 bug and announced to remove it with the next release.
