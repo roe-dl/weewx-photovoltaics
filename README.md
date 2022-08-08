@@ -297,6 +297,53 @@ load hours for various time periods within a template:
   </table>
 ```
 
+#### Energy consumption during day and night time
+
+During the light day you can use the PV energy for yourself and reduce
+energy costs. When it is dark you need energy from the grid or a
+battery pack. To think about a battery you need to know how much
+energy is consumed by night. So this is an example how to calculate it
+for the day:
+```
+#from weewx.units import ValueTuple, ValueHelper
+...
+#set $n1=$daylight(horizon=2,use_center=1).emsHousePower.energy_integral.kilowatt_hour.raw-$day(data_binding="pv_binding").heataccuPower.energy_integral.kilowatt_hour.raw
+#set $n1_vh=ValueHelper(ValueTuple($n1,'kilowatt_hour','group_energy'),formatter=$station.formatter)
+#set $n2=$day.emsHousePower.energy_integral.kilowatt_hour.raw-$daylight(horizon=2,use_center=1).emsHousePower.energy_integral.kilowatt_hour.raw
+#set $n2_vh=ValueHelper(ValueTuple($n2,'kilowatt_hour','group_energy'),formatter=$station.formatter)
+<p>heating: $day(data_binding="pv_binding").heataccuPower.energy_integral.kilowatt_hour</p>
+<p>daylight consumption (without heating): $n1_vh</p>
+<p>night consumption: $n1_vh</p>
+```
+
+To calculate those values for the week is more dificult:
+```
+#set $weekEd=0.0
+#set $weekEn=0.0
+#for $span in $LMTweek(data_binding="pv_binding").days
+#for $pp in $span.daylights(horizon=1,use_center=1)
+#set $houseday=$pp.emsHousePower.energy_integral.kilowatt_hour.raw
+#end for
+#set $heat=$span.heataccuPower.energy_integral.kilowatt_hour.raw
+#set $house=$span.emsHousePower.energy_integral.kilowatt_hour.raw
+#if $houseday is not None and $heat is not None and $house is not None
+#set $weekEd+=$houseday-$heat
+#set $weekEn+=$house-$houseday
+#end if
+#end for
+#set $weekEd_vh=ValueHelper(ValueTuple($weekEd,'kilowatt_hour','group_energy'),formatter=$station.formatter)
+#set $weekEn_vh=ValueHelper(ValueTuple($weekEn,'kilowatt_hour','group_energy'),formatter=$station.formatter)
+<p>week heating: $week(data_binding="pv_binding").heataccuPower.energy_integral.kilowatt_hour</p>
+<p>week daylight consumption: $weekEd_vh</p>
+<p>week night consumption: $weekEn_vh</p>
+```
+
+To use those examples [weewx-GTS](https://github.com/roe-dl/weewx-GTS)
+neeeds to be installed. It provides the `$daylight` and `.daylights`
+time spans.
+
+Those examples assume it is light enough for the PV modules to produce
+energy if the altitude of the sun is above 2°.
 
 ### Diagrams (ImageGenerator)
 
