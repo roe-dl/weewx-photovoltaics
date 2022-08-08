@@ -250,6 +250,54 @@ power over the archive interval. That results in a higher accuracy
 than the E3/DC display shows, as there 15 minutes averages are used
 for calculation. And it results in little differences in the readings.
 
+#### Full load hours
+
+Often people are interested in a measure of the degree of utilisation.
+That measure is called full load hour (in german: Vollaststunde,
+spezifischer Ertrag)
+and measured in kWh/kWp or simply hours.
+
+The following example shows how you could calculate und display full
+load hours for various time periods within a template:
+```
+#from weewx.units import ValueTuple, ValueHelper
+...
+  <table class="table-striped">
+    <tbody>
+    <tr>
+      <td></td>
+      <td>Heute</td>
+      <td>Gestern</td>
+      <td>Diese Woche</td>
+      <td>Diesen Monat</td>
+      <td>Dieses Jahr</td>
+    </tr>
+#set $kwp=$current.installedPVPeakPower.kilowatt.raw
+#if $kwp is not None and $kwp>0
+#set $hday=$day(data_binding="pv_binding").emsSolarPower.energy_integral.kilowatt_hour.raw/$kwp*3600.0
+#set $hday_vh=ValueHelper(ValueTuple($hday,'second','group_deltatime'),formatter=$station.formatter)
+#set $hyday=$yesterday(data_binding="pv_binding").emsSolarPower.energy_integral.kilowatt_hour.raw/$kwp*3600.0
+#set $hyday_vh=ValueHelper(ValueTuple($hyday,'second','group_deltatime'),formatter=$station.formatter)
+#set $hweek=$week(data_binding="pv_binding").emsSolarPower.energy_integral.kilowatt_hour.raw/$kwp*3600.0
+#set $hweek_vh=ValueHelper(ValueTuple($hweek,'second','group_deltatime'),formatter=$station.formatter)
+#set $hmonth=$month(data_binding="pv_binding").emsSolarPower.energy_integral.kilowatt_hour.raw/$kwp*3600.0
+#set $hmonth_vh=ValueHelper(ValueTuple($hmonth,'second','group_deltatime'),formatter=$station.formatter)
+#set $hyear=$year(data_binding="pv_binding").emsSolarPower.energy_integral.kilowatt_hour.raw/$kwp*3600.0
+#set $hyear_vh=ValueHelper(ValueTuple($hyear,'second','group_deltatime'),formatter=$station.formatter)
+    <tr>
+      <td>Vollaststunden</td>
+      <td style="text-align:right">$hday_vh.format("%(hour)d:%(minute)02d:%(second)02d h")</td>
+      <td style="text-align:right">$hyday_vh.format("%(hour)d:%(minute)02d:%(second)02d h")</td>
+      <td style="text-align:right">$hweek_vh.format("%(hour)d:%(minute)02d:%(second)02d h")</td>
+      <td style="text-align:right">$hmonth_vh.format("%(hour)d:%(minute)02d:%(second)02d h")</td>
+      <td style="text-align:right">$hyear_vh.format("%(hour)d h")</td>
+    </tr>
+#end if
+    </tbody>
+  </table>
+```
+
+
 ### Diagrams (ImageGenerator)
 
 in `skin.conf`:
