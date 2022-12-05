@@ -316,7 +316,7 @@ for the day:
 <p>night consumption: $n1_vh</p>
 ```
 
-To calculate those values for the week is more dificult:
+To calculate those values for the week is more difficult:
 ```
 #set $weekEd=0.0
 #set $weekEn=0.0
