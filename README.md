@@ -510,4 +510,4 @@ To show a diagram about solar course you could use the following configuration:
 * [Python-E3/DC-driver](https://github.com/fsantini/python-e3dc)
 * [E3/DC photovolatics inverter](https://www.e3dc.com)
 * [myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
-* [example page](https://www.woellsdorf-wetter.de/about/photovoltaics.html)
+* [example page](https://www.woellsdorf-wetter.de/photovoltaics/)
