@@ -10,7 +10,7 @@ def loader():
 class PVInstaller(ExtensionInstaller):
     def __init__(self):
         super(PVInstaller, self).__init__(
-            version="0.6",
+            version="0.7",
             name='Photovoltaics',
             description='Service to retrieve data from PV system E3/DC',
             author="Johanna Roedenbeck",

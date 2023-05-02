@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.6"
+VERSION = "0.7"
 
 import threading
 import configobj
@@ -413,12 +413,14 @@ class BaseThread(threading.Thread):
         self.running = True
         # buffer for the received data
         self.lock = threading.Lock()
+        self.evt = threading.Event()
         self.data = []
         self.last_get_ts = time.time()
         
     def shutDown(self):
         """ request shutdown of the thread """
         self.running = False
+        self.evt.set()
         loginf("thread '%s': shutdown requested" % self.name)
 
     def get_data(self):
@@ -558,7 +560,7 @@ class MyPVThread(BaseThread):
                     x['time'] = time.time()
                     #loginf(x)
                     self.put_data(x)
-                time.sleep(self.query_interval)
+                self.evt.wait(self.query_interval)
         except Exception as e:
             logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
         finally:
@@ -738,7 +740,7 @@ class E3dcThread(BaseThread):
                 except (ValueError,TypeError,LookupError) as e:
                     logerr("thread '%s': cannot put into queue %s" % (self.name,e))
                 # wait
-                time.sleep(self.query_interval)
+                self.evt.wait(self.query_interval)
         except Exception as e:
             logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
         finally:
@@ -1085,7 +1087,34 @@ class E3dcService(StdService):
         if has_mqtt and self.mqtt_thread:
             try:
                 self.mqtt_thread.shutDown()
-            except Exception:
+            except:
+                pass
+        # wait at max 10 seconds for shutdown to complete
+        timeout = time.time()+10
+        for ii in self.threads:
+            try:
+                w = timeout-time.time()
+                if w<=0: break
+                self.threads[ii]['thread'].join(w)
+                if self.threads[ii]['thread'].is_alive():
+                    logerr("unable to shutdown thread '%s'" % self.threads[ii]['thread'].name)
+            except:
+                pass
+        w = timeout-time.time()
+        if has_mqtt and self.mqtt_thread and w>0:
+            try:
+                self.mqtt_thread.join(w)
+            except:
+                pass
+        # report threads that are still alive
+        _threads = [ii for ii in self.threads]
+        for ii in _threads:
+            try:
+                if self.threads[ii]['thread'].is_alive():
+                    logerr("unable to shutdown thread '%s'" % self.threads[ii]['thread'].name)
+                del self.threads[ii]['thread']
+                del self.threads[ii]
+            except:
                 pass
         try:
             self.dbm_close()
