@@ -14,6 +14,7 @@ import configobj
 import time
 import json
 import sys
+import traceback
 
 from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError
 
@@ -563,6 +564,9 @@ class MyPVThread(BaseThread):
                 self.evt.wait(self.query_interval)
         except Exception as e:
             logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+            for ii in traceback.format_tb(e.__traceback__):
+                for jj in ii.splitlines():
+                    logerr("thread '%s', host '%s': *** %s" % (self.name,self.address,jj.replace('\n',' ').strip()))
         finally:
             loginf("thread '%s', host '%s' stopped" % (self.name,self.address))
 
@@ -743,6 +747,9 @@ class E3dcThread(BaseThread):
                 self.evt.wait(self.query_interval)
         except Exception as e:
             logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+            for ii in traceback.format_tb(e.__traceback__):
+                for jj in ii.splitlines():
+                    logerr("thread '%s': *** %s" % (self.name,jj.replace('\n',' ').strip()))
         finally:
             loginf("thread '%s', host '%s' stopped" % (self.name,self.address))
     
@@ -917,7 +924,10 @@ try:
                     except ValueError:
                         pass
             except Exception as e:
-                logerr("thread '%s': %s" % (self.name,e))
+                logerr("thread '%s': %s - %s" % (self.name,e.__class__.__name__,e))
+                for ii in traceback.format_tb(e.__traceback__):
+                    for jj in ii.splitlines():
+                        logerr("thread '%s': *** %s" % (self.name,jj.replace('\n',' ').strip()))
             finally:
                 loginf("thread '%s' stopped" % self.name)
 

@@ -21,3 +21,4 @@
 0.7
 * fix install.py
 * fix shutDown() function
+* enhance error logging
