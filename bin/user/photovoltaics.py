@@ -969,7 +969,7 @@ class E3dcService(StdService):
             mqtt_enable = False
             mqtt_topic = None
         if has_mqtt and mqtt_host and mqtt_enable:
-            self.mqtt_queue = queue.Queue()
+            self.mqtt_queue = queue.Queue(20)
             self.mqtt_thread = MqttThread(self.mqtt_queue,mqtt_host,None)
             self.mqtt_thread.start()
         else:

@@ -22,3 +22,4 @@
 * fix install.py
 * fix shutDown() function
 * enhance error logging
+* increase queue robustness
