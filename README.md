@@ -511,3 +511,4 @@ To show a diagram about solar course you could use the following configuration:
 * [E3/DC photovolatics inverter](https://www.e3dc.com)
 * [myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
 * [example page](https://www.woellsdorf-wetter.de/photovoltaics/)
+* [photovoltaics icons](https://github.com/roe-dl/photovoltaicsicons)
