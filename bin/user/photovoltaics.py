@@ -1302,6 +1302,10 @@ class E3dcService(StdService):
         
     def almanac(self, packet):
         """ calculate solarAzimuth, solarAltitude, solarPath """
+        # If `solarAzimuth`, `solarAltitude`, and `solarPAth` already
+        # in packet (which is possible in case of WeeWX from version
+        # 5.2 on using Skyfield almanac), do nothing.
+        if 'solarAzimuth' in packet: return
         try:
             usUnits = packet['usUnits']
             ts = packet.get('dateTime',time.time())

@@ -194,6 +194,9 @@ bug and announced to remove it with the next release.
 
 ### Sun
 
+These observation types are only provided if they are not already there,
+for example calculated by the WeeWX Skyfield almanac extension.
+
 Tag | Unit | Description
 ----|------|------------
 `solarAzimuth` | ° | solar azimuth (compass direction of the sun)
