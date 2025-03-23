@@ -35,7 +35,6 @@ class PVInstaller(ExtensionInstaller):
                       'protocol':'MQTT',
                       'enable':True,
                       'topic':'e3dc/weewx'}
-                  }
               },
               'DataBindings': {
                   'pv_binding': {
