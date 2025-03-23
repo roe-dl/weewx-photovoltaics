@@ -34,8 +34,9 @@ class PVInstaller(ExtensionInstaller):
                   'MQTT':{
                       'protocol':'MQTT',
                       'enable':True,
-                      'topic':'e3dc/weewx'
+                      'topic':'e3dc/weewx'}
                   }
+              },
               'DataBindings': {
                   'pv_binding': {
                       'database':'pv_sqlite',
@@ -43,7 +44,7 @@ class PVInstaller(ExtensionInstaller):
                       'manager':'weewx.manager.DaySummaryManager',
                       'schema':'user.photovoltaics.schema'
                   }
-              }
+              },
               'Databases': {
                   'pv_sqlite':{
                       'database_name':'photovoltaics.sdb',
