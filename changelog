@@ -23,3 +23,6 @@
 * fix shutDown() function
 * enhance error logging
 * increase queue robustness
+0.8
+* fix install.py (config as string)
+* fix `sumAddEnergy`

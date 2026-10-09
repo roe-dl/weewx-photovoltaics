@@ -7,7 +7,7 @@
 # RSCP API copyright Hager Energy GmbH
 # MQTT output inspired by weewx-mqtt by Matthew Wall
 
-VERSION = "0.7"
+VERSION = "0.8"
 
 import threading
 import configobj
@@ -179,6 +179,17 @@ class WxE3DC(E3DC):
                   ('PM_REQ_VOLTAGE_L2', 'None', None), 
                   ('PM_REQ_VOLTAGE_L3', 'None', None),
                   ('PM_REQ_TYPE', 'None', None)])
+        """
+                  ('PM_REQ_16','None',None),
+                  ('PM_REQ_17','None',None),
+                  ('PM_REQ_19','None',None),
+                  ('PM_REQ_1A','None',None),
+                  ('PM_REQ_1B','None',None),
+                  ('PM_REQ_1C','None',None),
+                  ('PM_REQ_1D','None',None),
+                  ('PM_REQ_1E','None',None),
+                  ('PM_REQ_1F','None',None)])
+        """
         
         reply = self.sendRequest(req)
         
@@ -186,9 +197,10 @@ class WxE3DC(E3DC):
         for ii in req[2]:
             if ii[0].find('REQ')>0:
                 key = ii[0].replace('_REQ_','_')
-                val = rscpFindTag(reply, key)[2]
-                key = ii[0].replace('_REQ_','_%s_' % pmIndex)
-                x[key] = val
+                val = rscpFindTag(reply, key)
+                if val is not None:
+                    key = ii[0].replace('_REQ_','_%s_' % pmIndex)
+                    x[key] = val[2]
         
         return x
 
@@ -626,13 +638,15 @@ class E3dcThread(BaseThread):
                     continue
                 try:
                     result2 = connection.get_PM_data(6)
-                except (AuthenticationError,CommunicationError,Exception):
+                except (AuthenticationError,CommunicationError,Exception) as e:
+                    logerr("thread '%s': PM %s - %s" % (self.name,e.__class__.__name__,e))
+                    #weeutil.logger.log_traceback(log.warning,'***')
                     result2 = {}
                 try:
                     result3 = self.get_pvi_data(connection)
                 except (AuthenticationError,CommunicationError,Exception):
                     result3 = {}
-                #loginf("run %s" % result)
+                #loginf("run %s" % result2)
                 err_ct = 0
                 # flatten the result dict
                 x = {}
@@ -725,6 +739,7 @@ class E3dcThread(BaseThread):
                         x['sumSolarEnergy'] = x['production_solar'] * since_last
                         x['sumHouseEnergy'] = x['consumption_house'] * since_last
                         x['sumWallEnergy'] = x['consumption_wall'] * since_last
+                        x['sumAddEnergy'] = x['production_add'] * since_last
                     except (ArithmeticError,ValueError,TypeError,LookupError):
                         pass
                 # add static values

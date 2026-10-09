@@ -8,9 +8,19 @@ Display example:
 
 ## Prerequisites
 
-```
+```shell
+source ~/weewx-venv/bin/activate
 pip install pye3dc
 ```
+
+In case of a WeeWX packet installation:
+
+```shell
+sudo pip install --break-system-packages pye3dc
+```
+
+[weewx-GTS](https://github.com/roe-dl/weewx-GTS)
+
 
 ## Installation instructions
 
