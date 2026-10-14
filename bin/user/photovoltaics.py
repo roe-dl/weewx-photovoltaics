@@ -737,8 +737,17 @@ class E3dcThread(BaseThread):
                 if since_last:
                     try:
                         x['sumSolarEnergy'] = x['production_solar'] * since_last
+                    except (ArithmeticError,ValueError,TypeError,LookupError):
+                        pass
+                    try:
                         x['sumHouseEnergy'] = x['consumption_house'] * since_last
+                    except (ArithmeticError,ValueError,TypeError,LookupError):
+                        pass
+                    try:
                         x['sumWallEnergy'] = x['consumption_wall'] * since_last
+                    except (ArithmeticError,ValueError,TypeError,LookupError):
+                        pass
+                    try:
                         x['sumAddEnergy'] = x['production_add'] * since_last
                     except (ArithmeticError,ValueError,TypeError,LookupError):
                         pass
