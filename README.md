@@ -24,8 +24,60 @@ sudo pip install --break-system-packages pye3dc
 
 ## Installation instructions
 
-Copy `photovoltaics.py` to the user directory of WeeWX and 
-edit `weewx.conf` as follows:
+1) download
+
+   ```
+   wget -O weewx-photovoltaics.zip https://github.com/roe-dl/weewx-photovoltaics/archive/master.zip
+   ```
+
+2) run the installer
+
+   WeeWX up to version 4.X
+
+   ```shell
+   sudo wee_extension --install weewx-photovoltaics.zip
+   ```
+
+   WeeWX from version 5.0 on and WeeWX packet installation
+
+   ```shell
+   sudo weectl extension install weewx-photovoltaics.zip
+   ```
+
+   WeeWX from version 5.0 on and WeeWX pip installation into an virtual environment
+
+   ```shell
+   source ~/weewx-venv/bin/activate
+   weectl extension install weewx-photovoltaics.zip
+   ```
+   
+3) edit configuration in `weewx.conf`
+
+   See section [Configuration instructions](#configuration-instructions)
+
+5) restart weewx
+
+   for SysVinit systems:
+
+   ```shell
+   sudo /etc/init.d/weewx stop
+   sudo /etc/init.d/weewx start
+   ```
+
+   for systemd systems:
+
+   ```shell
+   sudo systemctl stop weewx
+   sudo systemctl start weewx
+   ```
+
+## Configuration instructions
+
+Make sure the following data is present in your `weewx.conf` and replace
+all `replace_me` values by real values of your installation.
+
+For the E3/DC system you have to set the API key or RSCP password on the
+control panel of the device first. It is different from the user password.
 
 ```
 [DataBindings]
@@ -66,13 +118,6 @@ edit `weewx.conf` as follows:
         topic = "e3dc/weewx"
 
 ```
-
-Restart WeeWX.
-
-There is an installer in the base directory, but it is alpha and untested.
-Use it on your own risk. Make a backup of WeeWX before using the installer.
-If you are not sure, copy photovoltaics.py to the user directory of WeeWX
-manually, and also edit weewx.conf manually.
 
 ## Oberservation types
 
