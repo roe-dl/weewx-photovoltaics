@@ -16,7 +16,7 @@ import json
 import sys
 import traceback
 
-from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError
+from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError,PollError,SendError
 
 # deal with differences between python 2 and python 3
 try:
@@ -191,7 +191,7 @@ class WxE3DC(E3DC):
                   ('PM_REQ_1F','None',None)])
         """
         
-        reply = self.sendRequest(req)
+        reply = self.sendRequest(req, keepAlive)
         
         x = dict()
         for ii in req[2]:
@@ -261,7 +261,16 @@ class WxE3DC(E3DC):
                         rscpFindTag(req, "PVI_DC_STRING_ENERGY_ALL"), "PVI_VALUE"
                     )[2]
         }
-    
+ 
+    def get_EP_data(self, keepAlive=False):
+        x = dict()
+        tags = {'EP_REQ_IS_READY_FOR_SWITCH','EP_REQ_IS_GRID_CONNECTED','EP_REQ_IS_ISLAND_GRID','EP_REQ_IS_INVALID_STATE','EP_REQ_IS_POSSIBLE'}
+        last = len(tags)-1
+        for idx, tag in enumerate(tags):
+            reply = self.sendRequest((tag,'Bool',None),True if idx<last else keepAlive)
+            reply_tag = tag.replace('_REQ_','_')
+            x[reply_tag] = rscpFindTag(reply,reply_tag)[2]
+        return x
 
 # unit labels for optional MQTT output
 try:
@@ -276,6 +285,8 @@ except ImportError:
 ACCUM_SUM = { 'extractor':'sum' }
 ACCUM_STRING = { 'accumulator':'firstlast','extractor':'last' }
 ACCUM_LAST = { 'extractor':'last' }
+ACCUM_MIN = { 'extractor':'min' }
+ACCUM_MAX = { 'extractor':'max' }
     
 E3DC_OBS = {
     # storage
@@ -320,6 +331,16 @@ E3DC_OBS = {
     'PM_6_ENERGY_L1':('pmGridEnergyL1','watt_hour','group_energy',ACCUM_LAST),
     'PM_6_ENERGY_L2':('pmGridEnergyL2','watt_hour','group_energy',ACCUM_LAST),
     'PM_6_ENERGY_L3':('pmGridEnergyL3','watt_hour','group_energy',ACCUM_LAST),
+    'pmGridVoltageMax':('pmGridVoltageMax','volt','group_volt',ACCUM_MAX),
+    'pmGridVoltageMin':('pmGridVoltageMin','volt','group_volt',ACCUM_MIN),
+    'pmGridOkDur':('pmGridOkDur','hour','group_deltatime',ACCUM_SUM),
+    'pmGridOkAvailableDur':('pmGridOkAvailableDur','hour','group_deltatime',ACCUM_SUM),
+    # EP
+    'epGridConnectedDur':('epGridConnectedDur','hour','group_deltatime',ACCUM_SUM),
+    'epIslandDur':('epIslandDur','hour','group_deltatime',ACCUM_SUM),
+    'epGridConnectedAvailableDur':('epGridConnectedAvailableDur','hour','group_deltatime',ACCUM_SUM),
+    'epIslandAvailableDur':('epIslandAvailableDur','hour','group_deltatime',ACCUM_SUM),
+    'epCommunicationFailureDur':('epCommunicationFailureDur','hour','group_deltatime',ACCUM_SUM),
     # PVI
     'PVI_DC_VOLTAGE_T0':('pviDCvoltageT0','volt','group_volt',None),
     'PVI_DC_CURRENT_T0':('pviDCcurrentT0','amp','group_amp',None),
@@ -390,7 +411,8 @@ table = [('dateTime',             'INTEGER NOT NULL UNIQUE PRIMARY KEY'),
          ('solarAltitude',        'REAL'),
          ('solarPath',            'REAL'),
          ('radiation',            'REAL'),
-         ('maxSolarRad',          'REAL')] + [
+         ('maxSolarRad',          'REAL'),
+         ('gridFrequency',        'REAL')] + [
          (E3DC_OBS[key][0],'REAL') for key in E3DC_OBS] + [
          (MYPV_OBS[key][0],'REAL') for key in MYPV_OBS]
 
@@ -612,6 +634,8 @@ class E3dcThread(BaseThread):
             loginf("thread '%s', host '%s': installed PV power %.1f kW, installed battery capacity %.1f kW, maximum AC power %.1f kW" % (self.name,self.address,connection.installedPeakPower/1000.0,connection.installedBatteryCapacity/1000.0,connection.maxAcPower/1000.0))
             last_ts = time.time()
             err_ct = 0
+            last_is_grid_ok = None
+            last_is_island = None
             while self.running:
                 try:
                     if err_ct<5: err_ct += 1
@@ -637,7 +661,7 @@ class E3dcThread(BaseThread):
                     time.sleep(10*err_ct)
                     continue
                 try:
-                    result2 = connection.get_PM_data(6)
+                    result2 = connection.get_PM_data(6,keepAlive=True)
                 except (AuthenticationError,CommunicationError,Exception) as e:
                     logerr("thread '%s': PM %s - %s" % (self.name,e.__class__.__name__,e))
                     #weeutil.logger.log_traceback(log.warning,'***')
@@ -646,6 +670,10 @@ class E3dcThread(BaseThread):
                     result3 = self.get_pvi_data(connection)
                 except (AuthenticationError,CommunicationError,Exception):
                     result3 = {}
+                try:
+                    result4 = connection.get_EP_data(keepAlive=True)
+                except Exception as e:
+                    result4 = {'ERROR':'%s %s' % (e.__class__.__name__,e)}
                 #loginf("run %s" % result2)
                 err_ct = 0
                 # flatten the result dict
@@ -684,6 +712,41 @@ class E3dcThread(BaseThread):
                     pass
                 # result3 PVI
                 x.update(result3)
+                # grid state
+                voltages = dict()
+                voltages_ok = []
+                voltages_val = []
+                for phase in ('L1','L2','L3'):
+                    try:
+                        v = result2['PM_6_VOLTAGE_%s' % phase]
+                        voltages_ok.append(207.0<=v<=253.0)
+                        voltages_val.append(v)
+                        voltages[phase] = '%.1fV' % v
+                    except (LookupError,ValueError,TypeError,ArithmeticError):
+                        voltages_ok.append(None)
+                        voltages[phase] = 'unknown'
+                is_voltages_ok = False if False in voltages_ok else (True if voltages_ok and all(voltages_ok) else None)
+                is_grid_connected = result4.get('EP_IS_GRID_CONNECTED')
+                is_grid_ok = None if is_voltages_ok is None or is_grid_connected is None else (is_voltages_ok==True and is_grid_connected==True)
+                is_island = result4.get('EP_IS_ISLAND_GRID')
+                if is_grid_ok!=last_is_grid_ok or is_island!=last_is_island:
+                    # grid state changed
+                    if 'ERROR' in result4:
+                        grid_ok_str = result4['ERROR']
+                    else:
+                        grid_ok_str = 'grid ok' if is_grid_ok==True else ('grid failure' if is_grid_ok==False else str(is_grid_ok))
+                    island_str = 'on' if is_island==True else ('off' if is_island==False else 'unknown')
+                    voltages_ok_str = 'ok' if is_voltages_ok==True else ('out of range' if is_voltages_ok=='False' else str(is_voltages_ok))
+                    connected_str = 'grid connected' if is_grid_connected==True else ('grid not connected' if is_grid_connected==False else 'unknown grid connection state')
+                    loginf('Grid status: %s, island mode %s, %s, grid voltages %s L1 %s L2 %s L3 %s' % (
+                        grid_ok_str, island_str, connected_str, voltages_ok_str, 
+                        voltages['L1'], voltages['L2'], voltages['L3']
+                    ))
+                    last_is_grid_ok = is_grid_ok
+                    last_is_island = is_island
+                if voltages_val:
+                    x['pmGridVoltageMin'] = min(voltages_val)
+                    x['pmGridVoltageMax'] = max(voltages_val)
                 # calculate time period since last record
                 if last_ts>0:
                     try:
@@ -751,6 +814,20 @@ class E3dcThread(BaseThread):
                         x['sumAddEnergy'] = x['production_add'] * since_last
                     except (ArithmeticError,ValueError,TypeError,LookupError):
                         pass
+                # grid and island time
+                try:
+                    if is_island is not None:
+                        x['epIslandDur'] = since_last if is_island else 0.0
+                        x['epIslandAvailableDur'] = since_last
+                    if is_grid_connected is not None:
+                        x['epGridConnectedDur'] = since_last if is_grid_connected else 0.0
+                        x['epGridConnectedAvailableDur'] = since_last
+                    if is_voltages_ok is not None:
+                        x['pmGridOkDur'] = since_last if is_voltages_ok else 0.0
+                        x['pmGridOkAvailableDur'] = since_last
+                    x['epCommunicationFailureDur'] = since_last if 'ERROR' in result4 else 0.0
+                except (ArithmeticError,ValueError,TypeError,LookupError):
+                    pass
                 # add static values
                 try:
                     x['installedPeakPower'] = connection.installedPeakPower
@@ -1065,7 +1142,20 @@ class E3dcService(StdService):
             if ct>0:
                 self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
                 self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
-        
+        freq_source = config_dict.get('E3DC',dict()).get('grid_frequency_source',[None,None])
+        if not isinstance(freq_source,list):
+            freq_source = [freq_source,None]
+        self.grid_frequency_source = freq_source[0] if len(freq_source)>=1 else None
+        self.grid_frequency_condition = freq_source[1] if len(freq_source)>=2 else None
+        if self.grid_frequency_source and self.grid_frequency_source=='none':
+            self.grid_frequency_source = None
+        if self.grid_frequency_condition:
+            self.grid_frequency_not = self.grid_frequency_condition.startswith('!')
+            if self.grid_frequency_not:
+                self.grid_frequency_condition = self.grid_frequency_condition[1:].strip()
+        else:
+            self.grid_frequency_not = False
+    
     def _create_thread(self, thread_name, thread_dict, mqtt_topic):
         protocol = thread_dict.get('protocol','')
         address = thread_dict.get('host')
@@ -1186,6 +1276,12 @@ class E3dcService(StdService):
                         elif obs_list[key][3]==ACCUM_SUM:
                             result[key][0] += val[key]
                             result[key][1] = 1  # without + !!!
+                        elif obs_list[key][3]==ACCUM_MIN:
+                            result[key][0] = min(result[key][0],val[key]) if result[key][1] else val[key]
+                            result[key][1] = 1
+                        elif obs_list[key][3]==ACCUM_MAX:
+                            result[key][0] = max(result[key][0],val[key]) if result[key][1] else val[key]
+                            result[key][1] = 1
                         else:
                             result[key][0] += val[key]
                             result[key][1] += 1
@@ -1236,6 +1332,28 @@ class E3dcService(StdService):
                 event.packet.update(data)
                 # count records received from the device
                 self.threads[thread_name]['reply_count'] += reply.get('count',(0,None,None))[0]
+        # get grid frequency if specified
+        if self.grid_frequency_source:
+            # If a condition is specified, test it. If no condition is 
+            # specified, set grid frequency always. If the condition is
+            # not available, set grid frequency to `None`.
+            condition = event.packet.get(self.grid_frequency_condition) if self.grid_frequency_condition else True
+            if isinstance(condition,float):
+                condition = condition > 0.0
+            # What was calculated before, was the 'not' condition. So
+            # reverse it, if `grid_frequency_not` is NOT set.
+            if condition is not None and not self.grid_frequency_not: 
+                condition = not condition
+            # grid frequency
+            event.packet['gridFrequency'] = None if condition else event.packet.get(self.grid_frequency_source)
+            # check grid frequency range
+            try:
+                if 'pmGridOkDur' in event.packet and event.packet['gridFrequency'] is not None:
+                    if not 49.82<=event.packet['gridFrequency']<=50.18:
+                        # Grid frequency out of range
+                        event.packet['pmGridOkDur'] = 0.0
+            except (ArithmeticError,TypeError,ValueError):
+                pass
         self.almanac(event.packet)
         self.dbm_new_loop_packet(event.packet)
         if has_mqtt and self.mqtt_queue and self.mqtt_thread:
@@ -1465,6 +1583,8 @@ class E3dcUnits(StdService):
                 weewx_key = _obs_conf[0]
                 weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
                 log_dict[weewx_key] = _obs_conf[2]
+        weewx.units.obs_group_dict.setdefault('gridFrequency','group_frequency')
+        log_dict['gridFrequency'] = 'group_frequency'
         if 'ephem' in sys.modules:
             weewx.units.obs_group_dict['solarAzimuth'] = 'group_direction'
             weewx.units.obs_group_dict['solarAltitude'] = 'group_direction'

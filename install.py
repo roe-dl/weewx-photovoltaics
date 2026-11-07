@@ -6,6 +6,7 @@ from weecfg.extension import ExtensionInstaller
 from weeutil.config import config_from_str
 
 CONFIG = """[E3DC]
+    grid_frequency_source = heataccuMainsFrequency, epGridConnectedDur
     [[S10EPRO]]
         protocol = RSCP
         host = replace_me

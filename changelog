@@ -26,3 +26,6 @@
 0.8
 * fix install.py (config as string)
 * fix `sumAddEnergy`
+* process grid and island status (RCSP tags `EP_*`)
+* calculate minimum and maximum grid voltage during archive interval
+* configurable grid frequency source with condition

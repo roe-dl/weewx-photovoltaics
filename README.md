@@ -100,6 +100,7 @@ control panel of the device first. It is different from the user password.
         data_services = ..., user.photovoltaics.E3dcService
 
 [E3DC]
+    grid_frequency_source = heataccuMainsFrequency, epGridConnectedDur
     [[S10EPRO]]
         protocol = RSCP
         host = replace_me
@@ -119,7 +120,16 @@ control panel of the device first. It is different from the user password.
 
 ```
 
-## Oberservation types
+* `grid_frequency_source`: The first value of the list is the observation
+  type, where the grid frequency comes from, for example
+  `heataccuMainsFrequency`. The second value of the list is the condition
+  to be met, that the value form the source is really the grid frequency
+  and not the inverter frequency in island mode. The condition is also
+  an observation type. If its value is above 0.0 the condition is true.
+  Prepend the name of the observation type by `!` to invert the
+  condition. There is no default.
+
+## Observation types
 
 This extension provides several additional observation types
 holding readings from the PV inverter.
@@ -188,6 +198,8 @@ Tag | Unit | Description
 `pmGridEnergyL1` | kWh | electricity meter at phase L1 *)
 `pmGridEnergyL2` | kWh | electricity meter at phase L2 *)
 `pmGridEnergyL3` | kWh | electricity meter at phase L3 *)
+`pmGridVoltageMin` | V | minimum voltage of all phases during archive interval
+`pmGridVoltageMax` | V | maximum voltage of all phases during archive interval
 
 *) upwards counting for getting energy from the grid, downwards counting for
 feeding energy into the grid, even negative values are possible
@@ -232,6 +244,47 @@ Tag | Unit | Description
 `pviACenergyL2` | Wh | energy L2
 `pviACenergyL3` | Wh | energy L3
 
+### PV status values
+
+Tag | Unit | Description
+----|------|-----------------
+`pmGridOkDur` | hour | how long the grid was ok (which means the voltages and the frequency are in range)
+`pmGridOkAvailableDur` | hour | comparison value to `epGridOkDur`
+`epGridConnectedDur` | hour | how long the house grid to the grid (which means EP_IS_GRID_CONNECTED is true)
+`epGridConnectedAvailableDur` | hour | comparison value to `epGridConnectedDur`
+`epIslandDur` | hour | how long was the system in island mode
+`epIslandAvailableDur` | hour | comparison value to `epIslandDur`:
+`epCommunicationFailureDur` | hour | how long was the communication to the inverter unsuccessful
+
+Meaning of the values:
+
+Condition | Meaning
+----------|-------------
+`pmGridOkDur`==0.0 | The grid voltages or the grid frequency were out of range during the whole archive cycle.
+`pmGridOkDur`<`pmGridOkAvailableDur` | The grid voltages or the grid frequency were out of range part of the archive cycle.
+`pmGridOkDur`==`pmGridOkAvailableDur` | The grid voltages or the grid frequency were in range during the whole archive cycle.
+`epGridConnectedDur`==0.0 | The connection to the grid was switched off during the whole archive cycle.
+`epGridConnectedDur`<`epGridConnectedAvailableDur` | Part of the archive cycle the connection to the grid was switched off.
+`epGridConnectedDur`==`epGridConnectedAvailableDur` | The connection to the grid was swiched on during the whole archive cycle.
+`epIslandDur`==0.0 | The inverter was not in island mode during the whole archive cycle.
+`epIslandDur`<`epIslandAvailableDur` | Part of the archive cycle the inverter was in island mode.
+`epIslandDur`==`epIslandAvailableDur` | The inverter was in island mode during the whole archive cycle.
+
+A value of the `...Available...` observation types less than the length
+of the archive cycle (in case of `$current...`) or aggregation period 
+(in case of `$day...` etc.) means that not all data requests
+from the inverter were successful or WeeWX was restarted.
+
+You could write in the template:
+```
+#if $day.pmGridOkDur.raw is not None and $day.pmGridOkAvailableDur.raw is not None and $day.pmgGridOkDur.raw<$day.pmGridOkAvailableDur.raw
+There were grid supply problems during the day.
+#end if
+```
+
+Which values are considered in range:
+* voltage: 207 V to 253 V
+* frequency: 49.82 Hz to 50.18 Hz
 
 ### myPV ACTHOR
 
@@ -246,6 +299,12 @@ Tag | Unit |
 
 Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
 bug and announced to remove it with the next release.
+
+### General observation types
+
+Tag | Unit | Description
+----|------|--------------
+`gridFrequency` | Hz | grid frequency as defined by the `grid_frequency_source` configuration entry (The value is `None` in island mode, if the frequency is measured in the house grid.)
 
 ### Sun
 
