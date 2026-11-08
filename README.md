@@ -249,8 +249,9 @@ Tag | Unit | Description
 Tag | Unit | Description
 ----|------|-----------------
 `pmGridOkDur` | hour | how long the grid was ok (which means the voltages and the frequency are in range)
+`pmGridNotOkDur` | hour | how long the grid was NOT ok (which means the voltages or the frequency were out of range)
 `pmGridOkAvailableDur` | hour | comparison value to `epGridOkDur`
-`epGridConnectedDur` | hour | how long the house grid to the grid (which means EP_IS_GRID_CONNECTED is true)
+`epGridConnectedDur` | hour | how long the house grid is connected to the grid (which means EP_IS_GRID_CONNECTED is true)
 `epGridConnectedAvailableDur` | hour | comparison value to `epGridConnectedDur`
 `epIslandDur` | hour | how long was the system in island mode
 `epIslandAvailableDur` | hour | comparison value to `epIslandDur`:

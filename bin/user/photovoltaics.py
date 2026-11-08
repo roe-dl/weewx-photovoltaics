@@ -335,6 +335,7 @@ E3DC_OBS = {
     'pmGridVoltageMin':('pmGridVoltageMin','volt','group_volt',ACCUM_MIN),
     'pmGridOkDur':('pmGridOkDur','hour','group_deltatime',ACCUM_SUM),
     'pmGridOkAvailableDur':('pmGridOkAvailableDur','hour','group_deltatime',ACCUM_SUM),
+    'pmGridNotOkDur':('pmGridNotOkDur','hour','group_deltatime',ACCUM_SUM),
     # EP
     'epGridConnectedDur':('epGridConnectedDur','hour','group_deltatime',ACCUM_SUM),
     'epIslandDur':('epIslandDur','hour','group_deltatime',ACCUM_SUM),
@@ -1348,11 +1349,12 @@ class E3dcService(StdService):
             event.packet['gridFrequency'] = None if condition else event.packet.get(self.grid_frequency_source)
             # check grid frequency range
             try:
-                if 'pmGridOkDur' in event.packet and event.packet['gridFrequency'] is not None:
-                    if not 49.82<=event.packet['gridFrequency']<=50.18:
+                if 'pmGridOkDur' in event.packet:
+                    if event.packet['gridFrequency'] is not None and not 49.82<=event.packet['gridFrequency']<=50.18:
                         # Grid frequency out of range
                         event.packet['pmGridOkDur'] = 0.0
-            except (ArithmeticError,TypeError,ValueError):
+                    event.packet['pmGridNotOkDur'] = event.packet['pmGridOkAvailableDur']-event.packet['pmGridOkDur']
+            except (ArithmeticError,TypeError,ValueError,LookupError):
                 pass
         self.almanac(event.packet)
         self.dbm_new_loop_packet(event.packet)
