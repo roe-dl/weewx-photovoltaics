@@ -15,6 +15,7 @@ import time
 import json
 import sys
 import traceback
+import os.path
 
 from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError,PollError,SendError
 
@@ -271,6 +272,45 @@ class WxE3DC(E3DC):
             reply_tag = tag.replace('_REQ_','_')
             x[reply_tag] = rscpFindTag(reply,reply_tag)[2]
         return x
+
+
+class Cache(list):
+    """ Cache the last measurements 
+    
+        Instances of this class are used to cache the last `size` measurements
+        to later write them down to a file in case of an incident. Writing
+        the cache to the file is not included in this class because it 
+        depends on the kind of data in the cache.
+        
+        If the cache was recently written, the `silence` attribute makes
+        sure, it is not written again too fast.
+    """
+
+    def __init__(self, size, silence=1000):
+        super(Cache, self).__init__([None]*size)
+        self.pointer = 0
+        if silence<1: silence = 1
+        self.wait = -silence
+        self.silence = silence
+    
+    def put(self, data):
+        """ put a new value into the cache and discard the oldest one """
+        self[self.pointer] = data
+        self.pointer = (self.pointer+1)%len(self)
+    
+    def get(self):
+        """ get the actual cache """
+        return self[self.pointer:]+self[:self.pointer]
+    
+    def set_ready(self, wait):
+        """ mark the cache to be written after `wait` calls """
+        if self.wait<0: self.wait += wait+self.silence
+    
+    def is_ready(self):
+        """ check if the cache is ready to be written """
+        if self.wait>-self.silence: self.wait -= 1
+        return self.wait==0
+
 
 # unit labels for optional MQTT output
 try:
@@ -1143,6 +1183,7 @@ class E3dcService(StdService):
             if ct>0:
                 self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
                 self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_record)
+        # grid frequency
         freq_source = config_dict.get('E3DC',dict()).get('grid_frequency_source',[None,None])
         if not isinstance(freq_source,list):
             freq_source = [freq_source,None]
@@ -1156,6 +1197,19 @@ class E3dcService(StdService):
                 self.grid_frequency_condition = self.grid_frequency_condition[1:].strip()
         else:
             self.grid_frequency_not = False
+        self.last_grid_frequency_condition = None
+        # cache
+        self.path = os.path.join(
+            config_dict['WEEWX_ROOT'],
+            config_dict['DatabaseTypes']['SQLite']['SQLITE_ROOT']
+        )
+        self.grid_frequency_cache = Cache(3500)
+        # tolerances
+        freq_limits = config_dict.get('E3DC',dict()).get('grid_frequency_limits')
+        try:
+            self.grid_frequency_limits = (float(freq_limits[0]),float(freq_limits[1]))
+        except (TypeError,ValueError,LookupError):
+            self.grid_frequency_limits = (49.82,50.18)
     
     def _create_thread(self, thread_name, thread_dict, mqtt_topic):
         protocol = thread_dict.get('protocol','')
@@ -1247,7 +1301,10 @@ class E3dcService(StdService):
             pass
             
     def _process_data(self, thread_name):
+        """ get the measured data and accumulate them """
         # get collected data
+        # `get_data()` returns a list of all measurement records
+        # fetched since the last call of `get_data()`.
         data,interval = self.threads[thread_name]['thread'].get_data()
         # get protocol dependent observation types list
         if self.threads[thread_name]['protocol'].upper()=='MYPV': 
@@ -1286,6 +1343,8 @@ class E3dcService(StdService):
                         else:
                             result[key][0] += val[key]
                             result[key][1] += 1
+                    if self.grid_frequency_source and self.grid_frequency_source==obs_list[key][0]:
+                        self.grid_frequency_cache.put((val.get('time'),val[key]))
                 except Exception:
                     pass
         # extract values (average, sum, last)
@@ -1315,7 +1374,16 @@ class E3dcService(StdService):
         return x
         
     def new_loop_packet(self, event):
+        """ new LOOP packet
+        
+            WeeWX calls this method when the driver emitted a new LOOP packet.
+            The interval varies. It depends on the driver and the hardware, 
+            that the driver uses. It is independent from the query interval
+            used to fetch data in this service.
+        """
+        # collect data from all connected devices
         for thread_name in self.threads:
+            # get the accumulated measurements of the LOOP cycle
             reply = self._process_data(thread_name)
             if reply:
                 data = self._to_weewx(thread_name,reply,event.packet['usUnits'])
@@ -1337,8 +1405,9 @@ class E3dcService(StdService):
         if self.grid_frequency_source:
             # If a condition is specified, test it. If no condition is 
             # specified, set grid frequency always. If the condition is
-            # not available, set grid frequency to `None`.
-            condition = event.packet.get(self.grid_frequency_condition) if self.grid_frequency_condition else True
+            # not available here or in the last LOOP packet, set grid 
+            # frequency to `None`. 
+            condition = event.packet.get(self.grid_frequency_condition,self.last_grid_frequency_condition) if self.grid_frequency_condition else True
             if isinstance(condition,float):
                 condition = condition > 0.0
             # What was calculated before, was the 'not' condition. So
@@ -1350,12 +1419,22 @@ class E3dcService(StdService):
             # check grid frequency range
             try:
                 if 'pmGridOkDur' in event.packet:
-                    if event.packet['gridFrequency'] is not None and not 49.82<=event.packet['gridFrequency']<=50.18:
+                    if event.packet['gridFrequency'] is not None and not self.grid_frequency_limits[0]<=event.packet['gridFrequency']<=self.grid_frequency_limits[1]:
                         # Grid frequency out of range
                         event.packet['pmGridOkDur'] = 0.0
+                        # Set cache output counter
+                        self.grid_frequency_cache.set_ready(60)
                     event.packet['pmGridNotOkDur'] = event.packet['pmGridOkAvailableDur']-event.packet['pmGridOkDur']
             except (ArithmeticError,TypeError,ValueError,LookupError):
                 pass
+            # write cache if necessary
+            if self.grid_frequency_cache.is_ready():
+                self._write_cache(self.grid_frequency_cache.get(),
+                                   'frequency.log')
+            # remember the last condition
+            # Note: You cannot use the variable `condition` here, because
+            #       that would pass the value endlessly.
+            self.last_grid_frequency_condition = event.packet.get(self.grid_frequency_condition) if self.grid_frequency_condition else True
         self.almanac(event.packet)
         self.dbm_new_loop_packet(event.packet)
         if has_mqtt and self.mqtt_queue and self.mqtt_thread:
@@ -1546,6 +1625,35 @@ class E3dcService(StdService):
         # Instantiate a new accumulator
         new_accumulator = weewx.accum.Accum(weeutil.weeutil.TimeSpan(start_ts, end_ts))
         return new_accumulator
+    
+    def _write_cache(self, cache, fn):
+        """ write the grid frequency cache to a file
+        
+            This is done after the grid frequency got out of range. It 
+            contains every single value received from the measurement
+            device for the last hour, approximately. So you can probably
+            see how things developed. The usual 5 minutes average is
+            not useful in this case because it is too long a time.
+        """
+        fn = os.path.join(self.path, fn)
+        def _write():
+            try:
+                s = ['#----------------------------------\n']
+                for rec in cache:
+                    if rec:
+                        s.append('%s;%s\n' % (
+                            time.strftime('%Y-%m-%dT%H:%M:%S%z',time.localtime(rec[0])),
+                            ';'.join(['%.3f']*len(rec)) % rec
+                        ))
+                with open(fn, 'at') as f:
+                    f.write(''.join(s))
+            except Exception as e:
+                logerr('Error writing cache to %s: %s %s' % (fn, e.__class__.__name__, e))
+            finally:
+                # We do not wait for the garbage collector to do its job,
+                # because `s` is large.
+                del s
+        threading.Thread(target=_write).start()
 
         
 ##############################################################################

@@ -101,6 +101,7 @@ control panel of the device first. It is different from the user password.
 
 [E3DC]
     grid_frequency_source = heataccuMainsFrequency, epGridConnectedDur
+    grid_frequency_limits = 49.82,50.18
     [[S10EPRO]]
         protocol = RSCP
         host = replace_me
@@ -122,12 +123,24 @@ control panel of the device first. It is different from the user password.
 
 * `grid_frequency_source`: The first value of the list is the observation
   type, where the grid frequency comes from, for example
-  `heataccuMainsFrequency`. The second value of the list is the condition
-  to be met, that the value form the source is really the grid frequency
+  `heataccuMainsFrequency`. You can use observation types provided by
+  other extensions or the driver here, too.
+  The second value of the list is the condition
+  to be met, that the value from the source is really the grid frequency
   and not the inverter frequency in island mode. The condition is also
   an observation type. If its value is above 0.0 the condition is true.
   Prepend the name of the observation type by `!` to invert the
   condition. There is no default.
+* `grid_frequency_limits`: limits of grid frequency. Optional. If provided,
+  a list of 2 values, the lower limit and the upper limit, both are 
+  inclusive, default `49.82,50.18`. While the grid frequency is out of those
+  limits, the time is reported as 'grid not in order' in `pmGridOkDur`
+  and `pmGridNotOkDur`. Requires `grid_frequency_source´ to be set.
+  Set it to `0,100` to switch it off.
+* `enable`: Switch that device on or off. Optional. Default is on.
+* `protocol`: Defines the type of device to connect to. Actually
+  `RSCP` (for E3/DC), `MyPV` (for AC-THOR), and `MQTT` (for MQTT output)
+  are possible.
 
 ## Observation types
 
@@ -622,6 +635,35 @@ To show a diagram about solar course you could use the following configuration:
             yAxis_tickInterval = 90
 ```
 
+## Frequency monitoring
+
+If the ´grid_frequency_source` configuration parameter is set, this
+extension monitors the grid frequency for readings out of range.
+The acceptable range is set by the `grid_frequency_limits` configuration
+key, which has the default of 49.82 to 50.18, if not set.
+
+You need at least 2 decimals of frequency to use this feature. Otherwise
+it makes not sense because of the limits.
+
+Measurements are fetched as defined by the query interval (default is
+approximately one second). For WeeWX,
+all those measurements are accumulated over the archive interval.
+That is too much a timespan if you want to see something in case
+of a devoloping power outage. 
+
+But all the measurements are cached for about one hour, and in case
+of a range violation it is written to the file `frequency.log` in
+WeeWX's database directory.
+
+Please beware that that file can get huge if you have a lot of
+such incidents.
+
+If you want to investigate an incident, copy the file to your
+computer and open it by your favorite spreadsheet application.
+It is in simple CSV format. 
+
+Of course, measurements taken with the query interval may still be too 
+infrequent to reveal anything of interest.
 
 ## Links
 
