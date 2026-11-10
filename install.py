@@ -7,6 +7,12 @@ from weeutil.config import config_from_str
 
 CONFIG = """[E3DC]
     grid_frequency_source = heataccuMainsFrequency, epGridConnectedDur
+    [[Netzfrequenzmessung]]
+        # for European grid only
+        # see https://www.netzfrequenzmessung.de for terms of use
+        enable = false
+        protocol = netzfrequenzmessungde
+        query_interval = 1
     [[S10EPRO]]
         protocol = RSCP
         host = replace_me

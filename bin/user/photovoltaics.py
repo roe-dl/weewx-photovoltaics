@@ -425,6 +425,10 @@ MYPV_OBS = {
     'freq':('heataccuMainsFrequency','hertz','group_frequency',None)
     }
 
+NETZFREQUENZMESSUNGDE_OBS = {
+    'frequency':('internetGridFrequency','hertz','group_frequency',None)
+    }
+
 WX_OBS = [
     'dateTime','interval',
     'radiation','maxSolarRad',
@@ -455,7 +459,8 @@ table = [('dateTime',             'INTEGER NOT NULL UNIQUE PRIMARY KEY'),
          ('maxSolarRad',          'REAL'),
          ('gridFrequency',        'REAL')] + [
          (E3DC_OBS[key][0],'REAL') for key in E3DC_OBS] + [
-         (MYPV_OBS[key][0],'REAL') for key in MYPV_OBS]
+         (MYPV_OBS[key][0],'REAL') for key in MYPV_OBS] + [
+         (NETZFREQUENZMESSUNGDE_OBS[key][0],'REAL') for key in NETZFREQUENZMESSUNGDE_OBS]
 
 day_summaries = [(e[0], 'scalar') for e in table
                  if e[0] not in exclude_from_summary] 
@@ -652,13 +657,14 @@ class MyPVThread(BaseThread):
 
 class E3dcThread(BaseThread):
 
-    def __init__(self, thread_name, protocol, username, password, address, api_key, query_interval=1.0, mqtt_queue=None, mqtt_topic=None):
+    def __init__(self, thread_name, protocol, username, password, address, api_key, query_interval=1.0, grid_voltage_limits=(207.0,253.0), mqtt_queue=None, mqtt_topic=None):
         super(E3dcThread,self).__init__(thread_name,protocol)
         self.username = username
         self.password = password
         self.address = address
         self.api_key = api_key
         self.query_interval = weeutil.weeutil.to_float(query_interval)
+        self.grid_voltage_limits = grid_voltage_limits
         self.mqtt_queue = mqtt_queue
         self.mqtt_topic = mqtt_topic
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
@@ -760,7 +766,7 @@ class E3dcThread(BaseThread):
                 for phase in ('L1','L2','L3'):
                     try:
                         v = result2['PM_6_VOLTAGE_%s' % phase]
-                        voltages_ok.append(207.0<=v<=253.0)
+                        voltages_ok.append(self.grid_voltage_limits[0]<=v<=self.grid_voltage_limits[1])
                         voltages_val.append(v)
                         voltages[phase] = '%.1fV' % v
                     except (LookupError,ValueError,TypeError,ArithmeticError):
@@ -1029,6 +1035,11 @@ try:
                                         mqtt_key = MYPV_OBS[key][0]
                                     val = reply[key]
                                     x[mqtt_key] = val
+                        elif queuesource.lower()=='netzfrequenzmessungde':
+                            # data from netzfrequenzmessung.de
+                            if 'time' in reply and 'frequency' in reply:
+                                x['dateTime'] = reply['time']
+                                x['internetGridFrequency'] = reply['frequency']
                         else:
                             # data from WeeWX archive record or loop packet
                             for key in self.wx_obs_list:
@@ -1082,6 +1093,119 @@ except ImportError as e:
 
 
 ##############################################################################
+#   retrieve data from netfrequenzmessung.de                                 #
+##############################################################################
+
+class NetzfrequenzmessungDeThread(BaseThread):
+
+    SERVER_URL = 'https://dat.netzfrequenzmessung.de:9080/frequenz.xml'
+    
+    def __init__(self, thread_name, protocol, server_url=None, query_interval=1.0, mqtt_queue=None, mqtt_topic=None):
+        super(NetzfrequenzmessungDeThread, self).__init__(thread_name, protocol)
+        url = NetzfrequenzmessungDeThread.SERVER_URL if server_url is None else server_url
+        if not url.lower().startswith('https://'):
+            raise ValueError('invalid URL %s' % url)
+        url = url[8:]
+        self.address, url = url.split('/',1)
+        self.url_path = '/'+url
+        query_interval = weeutil.weeutil.to_float(query_interval)
+        self.query_interval = query_interval if query_interval>=1.0 else 1.0
+        self.mqtt_queue = mqtt_queue
+        self.mqtt_topic = mqtt_topic
+        logdbg("thread '%s': host '%s', path '%s', query interval %s" % (self.name,self.address,self.url_path,self.query_interval))
+        loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
+    
+    def run(self):
+        loginf("thread '%s': starting" % self.name)
+        try:
+            last_status = 0
+            last_timestamp = 0
+            while self.running:
+                reply = None
+                try:
+                    connection = http.client.HTTPSConnection(self.address)
+                    connection.request('GET',self.url_path)
+                    response = connection.getresponse()
+                    if response.status!=last_status:
+                        last_status = response.status
+                        loginf("thread '%s': Status %s - %s" % (self.name,response.status,response.reason))
+                    if response.status==200:
+                        reply = response.read(256)
+                except http.client.HTTPException as e:
+                    if last_status!=11111:
+                        logerr("thread '%s': %s - %s" % (self.name,e.__class__.__name__,e))
+                    last_status = 11111
+                except OSError as e:
+                    if last_status!=22222:
+                        logerr("thread '%s': %s - %s" % (self.name,e.__class__.__name__,e))
+                    last_status = 22222
+                finally:
+                    connection.close()
+                if reply:
+                    try:
+                        timestamp, freq = self.parse_data(reply.decode(encoding='utf-8'))
+                        if timestamp>last_timestamp:
+                            self.put_data({'time':timestamp,'frequency':freq})
+                        last_timestamp = timestamp
+                    except (LookupError, TypeError, ValueError) as e:
+                        if last_status!=33333:
+                            logerr("thread '%s': %s - %s " % (self.name,e.__class__.__name__,e))
+                        last_status = 33333
+                self.evt.wait(self.query_interval)
+        except Exception as e:
+            logerr("thread '%s': %s - %s" % (self.name,e.__class__.__name__,e))
+            for ii in traceback.format_tb(e.__traceback__):
+                for jj in ii.splitlines():
+                    logerr("thread '%s': *** %s" % (self.name,jj.replace('\n',' ').strip()))
+        finally:
+            loginf("thread '%s' stopped" % (self.name))
+    
+    def parse_data(self, reply):
+        """ parse the XML file 
+        
+            Args:
+                reply(str): XML data to parse
+            
+            Returns:
+                float: timestamp in Unix epoch time
+                float: grid frequency in Hertz
+            
+            Example XML data to parse:
+                <?xml version="1.0" encoding="UTF-8"?>
+                <r>
+                  <f>50.016</f>
+                  <z>2026-11-10T08:50:29+00:00</z>
+                </r>
+        """
+        # check that it is XML
+        if not reply.startswith('<?xml'):
+            raise TypeError('no XML')
+        # format check
+        if '<r>' not in reply:
+            raise LookupError('<r> not found')
+        # find time and frequency section
+        f_start = reply.find('<f>')
+        f_end = reply.find('</f>')
+        z_start = reply.find('<z>')
+        z_end = reply.find('</z>')
+        # check whether they were found
+        if f_start==-1 or f_end==-1 or z_start==-1 or z_end==-1:
+            raise LookupError('invalid data')
+        # get data
+        freq = reply[f_start+3:f_end].strip()
+        ti = reply[z_start+3:z_end].strip()
+        # convert time
+        ti = time.strptime(ti,'%Y-%m-%dT%H:%M:%S%z')
+        #loginf("ti '%s' tm_zone='%s' tm_gmtoff='%s'" % (str(ti),ti.tm_zone,ti.tm_gmtoff))
+        timestamp = time.mktime(ti)-time.timezone+ti.tm_gmtoff
+        #loginf(time.strftime('%Y-%m-%d %H:%M:%S %z',time.localtime(timestamp)))
+        # convert frequency
+        freq = weeutil.weeutil.to_float(freq)
+        # return result
+        return timestamp, freq
+
+
+##############################################################################
 #   data_services: augment LOOP packet with readings from E3/DC S10          #
 ##############################################################################
 
@@ -1104,7 +1228,7 @@ class E3dcService(StdService):
         except Exception:
             mqtt_host = None
         try:
-            mqtt_enable = config_dict['E3DC']['MQTT'].get('enable',True)
+            mqtt_enable = weeutil.weeutil.to_bool(config_dict['E3DC']['MQTT'].get('enable',True))
             mqtt_host = config_dict['E3DC']['MQTT'].get('server_url',mqtt_host)
             mqtt_topic = config_dict['E3DC']['MQTT'].get('topic','e3dc/weewx')
         except Exception:
@@ -1168,13 +1292,25 @@ class E3dcService(StdService):
             self.last_archive_outTemp = None   # degree_C
             self.last_archive_pressure = None  # mbar
         self.last_almanac_error = time.time()-300
+        # tolerances
+        freq_limits = config_dict.get('E3DC',dict()).get('grid_frequency_limits')
+        try:
+            self.grid_frequency_limits = (float(freq_limits[0]),float(freq_limits[1]))
+        except (TypeError,ValueError,LookupError):
+            self.grid_frequency_limits = (49.82,50.18)
+        volt_limits = config_dict.get('E3DC',dict()).get('grid_voltage_limits')
+        try:
+            self.grid_voltage_limits = (float(volt_limits[0]),float(volt_limits[1]))
+        except (TypeError,ValueError,LookupError):
+            self.grid_voltage_limits = (207.0,253.0)
         # create threads to retreive data from devices
         self.threads = dict()
         if 'E3DC' in config_dict:
             ct = 0
             for name in config_dict['E3DC'].sections:
-                if config_dict['E3DC'][name].get('enable',
-                        config_dict['E3DC'].get('enable',True)):
+                if weeutil.weeutil.to_bool(
+                        config_dict['E3DC'][name].get('enable',
+                        config_dict['E3DC'].get('enable',True))):
                     if self._create_thread(name,
                             config_dict['E3DC'][name],
                             config_dict['E3DC'][name].get('mqtt_topic',
@@ -1204,12 +1340,6 @@ class E3dcService(StdService):
             config_dict['DatabaseTypes']['SQLite']['SQLITE_ROOT']
         )
         self.grid_frequency_cache = Cache(3500)
-        # tolerances
-        freq_limits = config_dict.get('E3DC',dict()).get('grid_frequency_limits')
-        try:
-            self.grid_frequency_limits = (float(freq_limits[0]),float(freq_limits[1]))
-        except (TypeError,ValueError,LookupError):
-            self.grid_frequency_limits = (49.82,50.18)
     
     def _create_thread(self, thread_name, thread_dict, mqtt_topic):
         protocol = thread_dict.get('protocol','')
@@ -1218,7 +1348,7 @@ class E3dcService(StdService):
         # MQTT output thread is created elsewhere.
         if protocol.upper()=='MQTT' or thread_name=='MQTT': return False
         # IP address is mandatory.
-        if not address:
+        if not address and protocol.lower()!='netzfrequenzmessungde':
             logerr("thread '%s': missing IP address" % thread_name) 
             return False
         # Logging
@@ -1241,6 +1371,15 @@ class E3dcService(StdService):
                 thread_dict.get('password'),
                 address,
                 thread_dict.get('api_key'),
+                query_interval,
+                self.grid_voltage_limits,
+                self.mqtt_queue,
+                mqtt_topic)
+        elif protocol.lower()=='netzfrequenzmessungde':
+            self.threads[thread_name]['thread'] = NetzfrequenzmessungDeThread(
+                thread_name,
+                protocol,
+                thread_dict.get('server_url'),
                 query_interval,
                 self.mqtt_queue,
                 mqtt_topic)
@@ -1313,6 +1452,9 @@ class E3dcService(StdService):
         elif self.threads[thread_name]['protocol'].upper()=='RSCP':
             result = { obs:[0,0] for obs in E3DC_OBS }
             obs_list = E3DC_OBS
+        elif self.threads[thread_name]['protocol'].lower()=='netzfrequenzmessungde':
+            result = { obs:[0,0] for obs in NETZFREQUENZMESSUNGDE_OBS }
+            obs_list = NETZFREQUENZMESSUNGDE_OBS
         else:
             return {}
         # accumulate values

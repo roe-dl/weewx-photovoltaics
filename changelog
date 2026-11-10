@@ -30,3 +30,4 @@
 * calculate minimum and maximum grid voltage during archive interval
 * configurable grid frequency source with condition
 * log raw frequency measurements if frequency is out of range
+* retrieve data from netzfrequenzmessung.de

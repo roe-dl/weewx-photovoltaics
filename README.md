@@ -102,6 +102,12 @@ control panel of the device first. It is different from the user password.
 [E3DC]
     grid_frequency_source = heataccuMainsFrequency, epGridConnectedDur
     grid_frequency_limits = 49.82,50.18
+    [[Netzfrequenzmessung]]
+        # for European grid only
+        # see https://www.netzfrequenzmessung.de for terms of use
+        enable = false
+        protocol = netzfrequenzmessungde
+        query_interval = 1
     [[S10EPRO]]
         protocol = RSCP
         host = replace_me
@@ -135,11 +141,17 @@ control panel of the device first. It is different from the user password.
   a list of 2 values, the lower limit and the upper limit, both are 
   inclusive, default `49.82,50.18`. While the grid frequency is out of those
   limits, the time is reported as 'grid not in order' in `pmGridOkDur`
-  and `pmGridNotOkDur`. Requires `grid_frequency_source´ to be set.
+  and `pmGridNotOkDur`. Requires `grid_frequency_source` to be set.
   Set it to `0,100` to switch it off.
+* `grid_voltage_limits`: limits of grid voltage. Optional. If provided,
+  a list of 2 values, the lower limit and the upper limit, both are
+  inclusive, default `207.0,253.0`. While one of the grid voltages is out
+  of those limits, the time is reported as 'grid not in order' in
+  `pmGridOkDur` and `pmGridNotOkDur`.
 * `enable`: Switch that device on or off. Optional. Default is on.
 * `protocol`: Defines the type of device to connect to. Actually
-  `RSCP` (for E3/DC), `MyPV` (for AC-THOR), and `MQTT` (for MQTT output)
+  `RSCP` (for E3/DC), `MyPV` (for AC-THOR), `MQTT` (for MQTT output),
+  and `netzfrequenzmessungde` (for the API of netzfrequenzmessung.de)
   are possible.
 
 ## Observation types
@@ -313,6 +325,16 @@ Tag | Unit |
 
 Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
 bug and announced to remove it with the next release.
+
+### netzfrequenzmessung.de
+
+The website [netzfrequenzmessung.de](https://www.netzfrequenzmessung.de)
+provides an API to query the grid frequency. You can fetch data from
+there. Please observe their terms of use.
+
+Tag | Unit | Description
+----|------|--------------
+`internetGridFrequency` | hertz | grid frequency
 
 ### General observation types
 
