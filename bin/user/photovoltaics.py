@@ -639,6 +639,22 @@ class MyPVThread(BaseThread):
                                 pass
                     # x['time'] = x['unixtime'] # unixtime is bogus
                     x['time'] = time.time()
+                    # Experience says that the frequency measurement may be
+                    # erroneous if the power is on. Therefore the value is
+                    # removed if it is out of the usual range in this case. 
+                    # There is no confirmation for that behavior from the 
+                    # manufacturer.
+                    try:
+                        if self.acthor9s==1:
+                            active = weeutil.weeutil.to_float(x['power_act'])>0.0
+                        elif self.acthor9s==2:
+                            active = weeutil.weeutil.to_float(x['power_ac9'])>0.0
+                        else:
+                            active = None
+                        if active and 0.0<x['freq']<49.7:
+                            del x['freq']
+                    except (ArithmeticError, TypeError, ValueError, LookupError):
+                        pass
                     #loginf(x)
                     self.put_data(x)
                 self.evt.wait(self.query_interval)

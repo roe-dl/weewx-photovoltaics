@@ -31,3 +31,4 @@
 * configurable grid frequency source with condition
 * log raw frequency measurements if frequency is out of range
 * retrieve data from netzfrequenzmessung.de
+* remove out of range frequency values in some conditions
