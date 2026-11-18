@@ -41,6 +41,7 @@ if __name__ != '__main__':
     import weewx.almanac
     import weewx.xtypes
     import weeutil.weeutil
+    import weewx.defaults
 else:
     # for standalone testing
     import collections
@@ -433,6 +434,16 @@ WX_OBS = [
     'dateTime','interval',
     'radiation','maxSolarRad',
     'solarAzimuth','solarAltitude','solarPath']
+
+def get_obs_dict(protocol):
+    """ get the observation type dictionary from protocol """
+    if protocol.upper()=='RSCP':
+        return E3DC_OBS
+    if protocol.upper()=='MYPV':
+        return MYPV_OBS
+    if protocol.lower()=='netzfrequenzmessungde':
+        return NETZFREQUENZMESSUNGDE_OBS
+    return dict()
 
 ##############################################################################
 #    Database schema                                                         #
@@ -1462,17 +1473,8 @@ class E3dcService(StdService):
         # fetched since the last call of `get_data()`.
         data,interval = self.threads[thread_name]['thread'].get_data()
         # get protocol dependent observation types list
-        if self.threads[thread_name]['protocol'].upper()=='MYPV': 
-            result = { obs:[0,0] for obs in MYPV_OBS }
-            obs_list = MYPV_OBS
-        elif self.threads[thread_name]['protocol'].upper()=='RSCP':
-            result = { obs:[0,0] for obs in E3DC_OBS }
-            obs_list = E3DC_OBS
-        elif self.threads[thread_name]['protocol'].lower()=='netzfrequenzmessungde':
-            result = { obs:[0,0] for obs in NETZFREQUENZMESSUNGDE_OBS }
-            obs_list = NETZFREQUENZMESSUNGDE_OBS
-        else:
-            return {}
+        obs_list = get_obs_dict(self.threads[thread_name]['protocol'])
+        result = { obs:[0,0] for obs in obs_list }
         # accumulate values
         for ii,val in enumerate(data):
             #loginf("1 %s" % val)
@@ -1823,36 +1825,36 @@ class E3dcUnits(StdService):
     def __init__(self, engine, config_dict):
         super(E3dcUnits,self).__init__(engine, config_dict)
         # unit kilowatt
-        weewx.units.default_unit_label_dict.setdefault('kilowatt',u" kW")
-        weewx.units.default_unit_format_dict.setdefault('kilowatt',"%.1f") 
+        weewx.defaults.defaults['Units']['Labels'].setdefault('kilowatt',u" kW")
+        weewx.defaults.defaults['Units']['StringFormats'].setdefault('kilowatt',"%.1f") 
         # group_frequency and unit hertz
-        weewx.units.default_unit_label_dict.setdefault('hertz',u" Hz")
-        weewx.units.default_unit_format_dict.setdefault('hertz',"%.3f")
+        weewx.defaults.defaults['Units']['Groups'].setdefault('group_frequency','hertz')
+        weewx.defaults.defaults['Units']['Labels'].setdefault('hertz',u" Hz")
+        weewx.defaults.defaults['Units']['StringFormats'].setdefault('hertz',"%.3f")
         if __name__ != '__main__':
             for ii in weewx.units.std_groups:
                 weewx.units.std_groups[ii].setdefault('group_frequency','hertz')
         # augment groups dict by the PV observation types
-        self._augment_obs_group_dict()
+        self._augment_obs_group_dict(config_dict.get('E3DC',configobj.ConfigObj()))
         
-    def _augment_obs_group_dict(self):
+    def _augment_obs_group_dict(self, config_dict):
         log_dict = {}
         _accum = {}
-        for ii in E3DC_OBS:
-            _obs_conf = E3DC_OBS[ii]
-            if _obs_conf and _obs_conf[2] is not None:
-                weewx_key = _obs_conf[0]
-                weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
-                log_dict[weewx_key] = _obs_conf[2]
-                if _obs_conf[3]:
-                    _accum[weewx_key] = _obs_conf[3]
-        for ii in MYPV_OBS:
-            _obs_conf = MYPV_OBS[ii]
-            if _obs_conf and _obs_conf[2] is not None:
-                weewx_key = _obs_conf[0]
-                weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
-                log_dict[weewx_key] = _obs_conf[2]
+        for name in config_dict.sections:
+            if weeutil.weeutil.to_bool(
+                    config_dict[name].get('enable',
+                    config_dict.get('enable',True))):
+                obs_dict = get_obs_dict(config_dict[name].get('protocol'))
+                for _, _obs_conf in obs_dict.items():
+                    if _obs_conf and _obs_conf[2] is not None:
+                        weewx_key = _obs_conf[0]
+                        weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
+                        log_dict[weewx_key] = _obs_conf[2]
+                        if _obs_conf[3]:
+                            _accum[weewx_key] = _obs_conf[3]
         weewx.units.obs_group_dict.setdefault('gridFrequency','group_frequency')
         log_dict['gridFrequency'] = 'group_frequency'
+        weewx.defaults.defaults['Labels']['Generic'].setdefault('gridFrequency','Grid frequency')
         if 'ephem' in sys.modules:
             weewx.units.obs_group_dict['solarAzimuth'] = 'group_direction'
             weewx.units.obs_group_dict['solarAltitude'] = 'group_direction'
