@@ -17,7 +17,20 @@ import sys
 import traceback
 import os.path
 
-from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError,PollError,SendError
+try:
+    from e3dc import E3DC,AuthenticationError,CommunicationError,FrameError,PollError,SendError
+    has_e3dc = True
+except ImportError:
+    has_e3dc = False
+
+try:
+    from hoymiles_wifi.dtu import DTU
+    from hoymiles_wifi.hoymiles import is_encrypted_dtu
+    import asyncio
+    #from google.protobuf.json_format import MessageToDict, MessageToJson
+    has_dtu = True
+except ImportError:
+    has_dtu = False
 
 # deal with differences between python 2 and python 3
 try:
@@ -426,6 +439,23 @@ MYPV_OBS = {
     'freq':('heataccuMainsFrequency','hertz','group_frequency',None)
     }
 
+DTU_SGS_OBS = {
+    'voltage':('pviACvoltage','volt','group_volt',None),
+    'frequency':('pviACfrequency','hertz','group_frequency',None),
+    'active_power':('pviACpower','watt','group_power',None),
+    'reactive_power':('pviACreactivePower','watt','group_power',None),
+    'current':('pviACcurrent','amp','group_amp',None),
+    'temperature':('pviTemp','degree_C','group_temperature',None),
+}
+
+DTU_PV_OBS = {
+    'voltage':('pviDCvoltage','volt','group_volt',None),
+    'current':('pviDCcurrent','amp','group_amp',None),
+    'power':('pviDCpower','watt','group_power',None),
+    'energyTotal':('pviDCenergy','watt_hour','group_energy',ACCUM_LAST),
+    'energyDaily':('pviDCenergyToday','watt_hour','group_energy',ACCUM_LAST),
+}
+
 NETZFREQUENZMESSUNGDE_OBS = {
     'frequency':('internetGridFrequency','hertz','group_frequency',None)
     }
@@ -441,6 +471,8 @@ def get_obs_dict(protocol):
         return E3DC_OBS
     if protocol.upper()=='MYPV':
         return MYPV_OBS
+    if protocol.upper()=='DTU':
+        return DTU_SGS_OBS
     if protocol.lower()=='netzfrequenzmessungde':
         return NETZFREQUENZMESSUNGDE_OBS
     return dict()
@@ -508,6 +540,7 @@ class BaseThread(threading.Thread):
         self.evt = threading.Event()
         self.data = []
         self.last_get_ts = time.time()
+        self.obs_dict = dict()
         
     def shutDown(self):
         """ request shutdown of the thread """
@@ -553,6 +586,156 @@ class BaseThread(threading.Thread):
                 self.lock.release()
 
 ##############################################################################
+#    Thread to retriev data from Hoymiles inverter
+##############################################################################
+
+class DTUThread(BaseThread):
+
+    DECIMALS = {
+        'voltage': 0.1,          # SGS (AC), PV (DC)
+        'frequency': 0.01,       # SGS (AC)
+        'active_power': 0.1,     # SGS (AC)
+        'current': 0.01,         # SGS (AC), PV (DC)
+        'power_factor': 0.001,   # SGS (AC)
+        'temperature': 0.1,      # SGS
+        'power':0.1,             # PV (DC)
+    }
+    
+    def  __init__(self, thread_name, protocol, address, inverter_list, query_interval, mqtt_queue, mqtt_topic):
+        super(DTUThread, self).__init__(thread_name, protocol)
+        self.address = address
+        self.query_interval = weeutil.weeutil.to_float(query_interval)
+        self.mqtt_queue = mqtt_queue
+        self.mqtt_topic = mqtt_topic
+        # set the observation tpyes according to the configured list of inverters
+        if inverter_list:
+            self.inv_key = lambda sn,obs: '%s:%s' % (sn,obs)
+            for name, conf in inverter_list:
+                sn = conf.get('serial_number')
+                prefix = conf.get('prefix','')
+                suffix = conf.get('suffix','')
+                if not prefix and not suffix: prefix = name
+                loginf("thread '%s', host '%s': observation types of inverter '%s', S/N '%s' have prefix '%s', suffix '%s'" % (self.name, self.address, name, sn, prefix, suffix))
+                for obs, val in DTU_SGS_OBS.items():
+                    self.obs_dict[self.inv_key(sn,obs)] = (
+                        '%s%s%s%s' % (
+                            prefix.lower(),
+                            val[0][0].upper() if prefix else val[0][0],
+                            val[0][1:],
+                            suffix
+                        ),
+                        val[1],val[2],val[3]
+                    )
+                for track in range(4):
+                    for obs, val in DTU_PV_OBS.items():
+                        self.obs_dict['%s:T%s' % (self.inv_key(sn,obs),track+1)] = (
+                            '%s%s%s%sT%s' % (
+                                prefix.lower(),
+                                val[0][0].upper() if prefix else val[0][0],
+                                val[0][1:],
+                                suffix,
+                                track
+                            ),
+                            val[1],val[2],val[3]
+                        )
+        else:
+            self.inv_key = lambda sn,obs: str(obs)
+            self.obs_dict = DTU_SGS_OBS
+        loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
+
+    async def open_device(self):
+        """ open connection to DTU and receive encryption info """
+        dtu = DTU(self.address)
+        info = await dtu.async_app_information_data()
+        if not info:
+            logerr('Could not read DTU information. Waiting 60 seconds.')
+            return None
+        #loginf('info %s' % MessageToDict(info))
+        loginf("thread '%s', host '%s': DTU S/N %s, PV inverter S/N %s" % (
+            self.name, self.address,
+            info.dtu_serial_number,
+            ', '.join([str(i.pv_serial_number) for i in info.pv_info])
+        ))
+        # encryption data
+        dtu.dtu_time_offset = info.timestamp - round(time.time())
+        dtu.is_encrypted = bool(is_encrypted_dtu(info.dtu_info.dfs))
+        dtu.enc_rand = info.dtu_info.enc_rand
+        return dtu
+    
+    async def read_data(self, dtu):
+        """ get data from DTU """
+        return await dtu.async_get_real_data_new()
+
+    def process_reply(self, reply):
+        """ process actual data 
+        
+            Note: During the night no measurements are sent. The reply 
+                  contains the serial number and the warning number
+                  only.
+        """
+        # data fields: device_serial_number, timestamp, ap, firmware_version, sgs_data, pv_data
+        x = dict()
+        # inverter data
+        # data fields: serial_number, firmware_version, voltage, frequency, active_power, current, power_factor, temperature, warning_number, link_status, modulation_index_signal
+        for sgs in reply.sgs_data:
+            sn = sgs.serial_number
+            for obs, val in sgs.ListFields():
+                try:
+                    obs_name = obs.name
+                    #loginf('%s %s' % (obs_name,val))
+                    x[self.inv_key(sn,obs_name)] = round(weeutil.weeutil.to_float(val)*DTUThread.DECIMALS[obs_name],3) if obs_name in DTUThread.DECIMALS else val
+                except (ValueError, TypeError, ArithmeticError):
+                    pass
+        # pv module data
+        # data fields: serial_number, port_number, voltage, current, power, energy_total, energy_daily, error_code
+        for pv in reply.pv_data:
+            #loginf('pvData %s' % pv)
+            sn = pv.serial_number
+            track = pv.port_number
+            for obs, val in pv.ListFields():
+                try:
+                    obs_name = obs.name
+                    if obs_name in DTUThread.DECIMALS:
+                        x['%s:T%s' % (self.inv_key(sn,obs_name),track)] = round(weeutil.weeutil.to_float(val)*DTUThread.DECIMALS[obs_name],3)
+                except (ValueError, TypeError, ArithmeticError):
+                    pass
+        # queue data
+        if x: self.put_data(x)
+    
+    def run(self):
+        loginf("thread '%s', host '%s': starting" % (self.name, self.address))
+        try:
+            dtu = None
+            last_status = 0
+            failure_wait = 60
+            while self.running:
+                # open connection to DTU
+                if dtu is None:
+                    dtu = asyncio.run(self.open_device())
+                # read data
+                if dtu is not None:
+                    # read data
+                    reply = asyncio.run(self.read_data(dtu))
+                    if reply:
+                        self.process_reply(reply)
+                        failure_wait = 60
+                    else:
+                        dtu = None
+                    self.evt.wait(self.query_interval)
+                else:
+                    # opening connection failed
+                    self.evt.wait(failure_wait)
+                    if failure_wait<300: failure_wait *= 2
+        except Exception as e:
+            logerr("thread '%s', host '%s': %s - %s" % (self.name,self.address,e.__class__.__name__,e))
+            for ii in traceback.format_tb(e.__traceback__):
+                for jj in ii.splitlines():
+                    logerr("thread '%s', host '%s': *** %s" % (self.name,self.address,jj.replace('\n',' ').strip()))
+        finally:
+            loginf("thread '%s', host '%s' stopped" % (self.name,self.address))
+
+
+##############################################################################
 #    Thread to retrieve data from myPV
 ##############################################################################
 
@@ -569,6 +752,7 @@ class MyPVThread(BaseThread):
         self.mqtt_queue = mqtt_queue
         self.mqtt_topic = mqtt_topic
         self.acthor9s = None
+        self.obs_dict = MYPV_OBS
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
         
     def read_device_config(self):
@@ -694,6 +878,7 @@ class E3dcThread(BaseThread):
         self.grid_voltage_limits = grid_voltage_limits
         self.mqtt_queue = mqtt_queue
         self.mqtt_topic = mqtt_topic
+        self.obs_dict = E3DC_OBS
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
         
     def run(self):
@@ -1139,6 +1324,7 @@ class NetzfrequenzmessungDeThread(BaseThread):
         self.query_interval = query_interval if query_interval>=1.0 else 1.0
         self.mqtt_queue = mqtt_queue
         self.mqtt_topic = mqtt_topic
+        self.obs_dict = NETZFREQUENZMESSUNGDE_OBS
         logdbg("thread '%s': host '%s', path '%s', query interval %s" % (self.name,self.address,self.url_path,self.query_interval))
         loginf("thread '%s', host '%s': initialized" % (self.name,self.address))
     
@@ -1374,6 +1560,13 @@ class E3dcService(StdService):
         query_interval = thread_dict.get('query_interval',1)
         # MQTT output thread is created elsewhere.
         if protocol.upper()=='MQTT' or thread_name=='MQTT': return False
+        # RSCP requires the `e3dc` module
+        if protocol.upper()=='RSCP' and not has_e3dc: 
+            logerr('Missing e3dc module. Install it using pip.')
+            return False
+        if protocol.upper()=='DTU' and not has_dtu:
+            logerr('Missing hoymiles module. Install it using pip.')
+            return False
         # IP address is mandatory.
         if not address and protocol.lower()!='netzfrequenzmessungde':
             logerr("thread '%s': missing IP address" % thread_name) 
@@ -1400,6 +1593,15 @@ class E3dcService(StdService):
                 thread_dict.get('api_key'),
                 query_interval,
                 self.grid_voltage_limits,
+                self.mqtt_queue,
+                mqtt_topic)
+        elif protocol.upper()=='DTU':
+            self.threads[thread_name]['thread'] = DTUThread(
+                thread_name,
+                protocol,
+                address,
+                [(inverter,thread_dict[inverter]) for inverter in thread_dict.sections],
+                query_interval,
                 self.mqtt_queue,
                 mqtt_topic)
         elif protocol.lower()=='netzfrequenzmessungde':
@@ -1473,10 +1675,10 @@ class E3dcService(StdService):
         # fetched since the last call of `get_data()`.
         data,interval = self.threads[thread_name]['thread'].get_data()
         # get protocol dependent observation types list
-        obs_list = get_obs_dict(self.threads[thread_name]['protocol'])
+        obs_list = self.threads[thread_name]['thread'].obs_dict
         result = { obs:[0,0] for obs in obs_list }
         # accumulate values
-        for ii,val in enumerate(data):
+        for ii, val in enumerate(data):
             #loginf("1 %s" % val)
             for key in val:
                 try:
@@ -1844,14 +2046,43 @@ class E3dcUnits(StdService):
             if weeutil.weeutil.to_bool(
                     config_dict[name].get('enable',
                     config_dict.get('enable',True))):
+                # observation type dictionary for the given protocol
                 obs_dict = get_obs_dict(config_dict[name].get('protocol'))
-                for _, _obs_conf in obs_dict.items():
-                    if _obs_conf and _obs_conf[2] is not None:
-                        weewx_key = _obs_conf[0]
-                        weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
-                        log_dict[weewx_key] = _obs_conf[2]
-                        if _obs_conf[3]:
-                            _accum[weewx_key] = _obs_conf[3]
+                # list of inverters covered by this section
+                inverters = config_dict[name].sections if config_dict[name].sections else ['']
+                # In case of DTU add PVI DC observation types
+                if obs_dict==DTU_SGS_OBS:
+                    obs_dict = obs_dict.copy()
+                    for tracker in range(config_dict[name].get('trackers',4)):
+                        for obs, val in DTU_PV_OBS.items():
+                            obs_dict['%s:T%s' % (obs,tracker+1)] = (
+                                '%sT%s' % (val[0],tracker),
+                                val[1],val[2],val[3]
+                            )
+                # set WeeWX observation types
+                for inverter in inverters:
+                    for _, _obs_conf in obs_dict.items():
+                        if _obs_conf and _obs_conf[2] is not None:
+                            if inverter and config_dict[name][inverter].get('serial_number'):
+                                # DTU
+                                prefix = config_dict[name][inverter].get('prefix','')
+                                suffix = config_dict[name][inverter].get('suffix','')
+                                if not prefix and not suffix: prefix = inverter
+                                tracker = -2 if _obs_conf[0][-1].isdecimal() and _obs_conf[0][-2]=='T' else len(_obs_conf[0])
+                                weewx_key = '%s%s%s%s%s' % (
+                                    prefix.lower(),
+                                    _obs_conf[0][0].upper() if prefix else _obs_conf[0][0],
+                                    _obs_conf[0][1:tracker],
+                                    suffix,
+                                    _obs_conf[0][tracker:]
+                                )
+                            else:
+                                # E3DC, MYPV etc.
+                                weewx_key = _obs_conf[0]
+                            weewx.units.obs_group_dict[weewx_key] = _obs_conf[2]
+                            log_dict[weewx_key] = _obs_conf[2]
+                            if _obs_conf[3]:
+                                _accum[weewx_key] = _obs_conf[3]
         weewx.units.obs_group_dict.setdefault('gridFrequency','group_frequency')
         log_dict['gridFrequency'] = 'group_frequency'
         weewx.defaults.defaults['Labels']['Generic'].setdefault('gridFrequency','Grid frequency')

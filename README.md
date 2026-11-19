@@ -1,12 +1,20 @@
 # weewx-photovoltaics
 
-Extension to WeeWX for processing data of the photovoltaics system E3/DC
+Extension to WeeWX for processing data of photovoltaics inverters
+
+This extension actually supports:
+* Hager E3/DC power plant
+* Hoymiles inverter
+* MyPV ACTHOR
+* netzfrequenzmessung.de API
 
 Display example:
 
 <p align="center"><img src="example-display-800.png" /></p>
 
 ## Prerequisites
+
+For Hager E3/DC inverter:
 
 ```shell
 source ~/weewx-venv/bin/activate
@@ -19,6 +27,22 @@ In case of a WeeWX packet installation:
 sudo pip install --break-system-packages pye3dc
 ```
 
+For Hoymiles inverter:
+
+```shell
+source ~/weewx-venv/bin/activate
+pip install hoymiles-wifi
+```
+
+In case of a WeeWX packet installation:
+
+```shell
+sudo apt-get install python3-crcmod
+sudo apt-get install python3-protobuf
+sudo apt-get install python3-cryptography
+pip install --break-system-packages hoymiles-wifi
+```
+ 
 [weewx-GTS](https://github.com/roe-dl/weewx-GTS)
 
 
@@ -109,6 +133,7 @@ control panel of the device first. It is different from the user password.
         protocol = netzfrequenzmessungde
         query_interval = 1
     [[S10EPRO]]
+        # Hager E3/DC
         protocol = RSCP
         host = replace_me
         username = replace_me
@@ -117,10 +142,29 @@ control panel of the device first. It is different from the user password.
         query_interval = 1           # optional
         #mqtt_topic = "e3dc/weewx"   # normally not required
     [[ACTHOR]]
+        # MyPV ACTHOR
         protocol = MyPV
         host = replace_me
         #mqtt_topic = "acthor/weewx" # normally not required
+    [[DTU]]
+        # Hoymiles
+        enable = false
+        protocol = DTU
+        host = replace_me
+        query_interval = 1
+        # maximum number of trackers per inverter (optional, default 4)
+        #trackers = 4
+        # inverters (name the sections useful)
+        [[[inverter1]]]
+            # serial number of the inverter
+            serial_number = replace_me
+            # observation type name prefix (optional)
+            prefix = replace_me
+            # observation type name suffix (optional)
+            suffix = replace_me
+        ...
     [[MQTT]]
+        # MQTT output
         protocol = MQTT
         enable = true
         topic = "e3dc/weewx"
@@ -153,6 +197,10 @@ control panel of the device first. It is different from the user password.
   `RSCP` (for E3/DC), `MyPV` (for AC-THOR), `MQTT` (for MQTT output),
   and `netzfrequenzmessungde` (for the API of netzfrequenzmessung.de)
   are possible.
+* `host`: host name or IP address of the device to connect
+  (mandatory except protocol `netzfrequenzmessungde` and `MQTT`)
+* `query_interval`: interval to retrieve data from the device
+  (optional, default 1 second)
 
 ## Observation types
 
@@ -162,7 +210,7 @@ holding readings from the PV inverter.
 To access these observation types you need to specify `data_binding =
 pv_binding` 
 
-### Battery storage
+### E3/DC Battery storage
 
 Tag | Unit | Alternative Unit | Description
 ----|------|------------------|-----------
@@ -173,7 +221,7 @@ Tag | Unit | Alternative Unit | Description
 `sumBatteryChargeEnergy` | Wh | kWh | calculated charge energy
 `sumBatteryDischargeEnergy` | Wh | kWh | calculated discharge energy
 
-### Supply
+### E3/DC Supply
 
 Tag | Unit | Alternative Unit | Description
 ----|------|------------------|----------------
@@ -187,7 +235,7 @@ Tag | Unit | Alternative Unit | Description
 `sumGridFeedinEnergy` | Wh | kWh | energy feeded into grid
 `sumAddEnergy` | Wh | kWh | energy produced by additional supply
 
-### Consumption
+### E3/DC Consumption
 
 Tag | Unit | Alternative Unit | Description
 ----|------|------------------|------------
@@ -198,7 +246,7 @@ Tag | Unit | Alternative Unit | Description
 `sumHouseEnergy` | Wh | kWh | calculated inhouse consumption energy
 `sumWallEnergy` | Wh | kWh | calculated wallbox consumption energy
 
-### Static values
+### E3/DC Static values
 
 Tag | Unit | Alternative Unit
 ----|------|-----------------
@@ -208,7 +256,7 @@ Tag | Unit | Alternative Unit
 `pvMaxBatChargePower` | W | kW
 `pvMaxBatDischargePower` | W | kW
 
-### PM
+### E3/DC Power meter
 
 Readings of the power meter included in the E3/DC system
 
@@ -229,7 +277,7 @@ Tag | Unit | Description
 *) upwards counting for getting energy from the grid, downwards counting for
 feeding energy into the grid, even negative values are possible
 
-### PVI DC
+### E3/DC PVI DC
 
 solar tracker readings 
 
@@ -244,7 +292,7 @@ Tag | Unit | Description
 `pviDCenergyT0` | Wh | earned energy so far for tracker 1
 `pviDCenergyT1` | Wh | earned energy so far for tracker 2
 
-### PVI AC
+### E3/DC PVI AC
 
 PV inverter AC output
 
@@ -269,7 +317,7 @@ Tag | Unit | Description
 `pviACenergyL2` | Wh | energy L2
 `pviACenergyL3` | Wh | energy L3
 
-### PV status values
+### E3/DC PV status values
 
 Tag | Unit | Description
 ----|------|-----------------
@@ -326,15 +374,62 @@ Tag | Unit |
 Note: The field `unixtime` in `data.jsn` is bogus. MyPV acknowledged that
 bug and announced to remove it with the next release.
 
+### Hoymiles inverters
+
+You can connect to a DTU device, which in turn connects to several Hoymiles
+inverters. In `weewx.conf` you can set a prefix and/or suffix for the
+observation type names of each inverter to distinguish them. 
+In case of a prefix, the first character
+of base name is turned to uppercase. For example, if the prefix was `hms`
+and the tag `pviACvoltage`, the resulting tag is `hmsPviACvoltage`.
+The suffix can be used to name the phase the inverter is connected
+to, like `L1`, `L2`, or `L3`.
+
+As the number of inverters on one DTU is variable and the observation
+type names are configurable, columns need to be added to the
+database manually by `weectl database add-column ... --data-binding=pv_binding`
+
+Note: The Hoymiles inverters do not provide data during the night.
+WeeWX shows `N/A` then.
+
+Note: The DTU serves one device only at a time. While you retrieve data with
+this service, the Hoymiles mobile phone app does not receive data.
+
+#### Hoymiles PVI AC
+
+Tag | Unit | Description
+----|------|-------------
+`pviACvoltage` | V | inverter AC output voltage
+`pviACcurrent` | A | inverter AC output current
+`pviACfrequency` | Hz | frequency at the inverter (2 decimals only)
+`pviACpower` | W | inverter AC output power
+`pviACreactivePower | var | inverter AC output reactive power
+`pviTemp` | °C | inverter temperature
+
+#### Hoymiles PVI DC
+
+Tag | Unit | Description
+----|------|-------------
+`pviDCvoltageT*` | V | actual tracker voltage (`*` = [0,1,2,3])
+`pviDCcurrentT*` | A | actual tracker current (`*` = [0,1,2,3])
+`pviDCpowerT*` | W | actual tracker power (`*` = [0,1,2,3])
+`pviDCenergyT*` | Wh | earned energy (`*` = [0,1,2,3])
+`pviDCenergyDailyT*` | Wh | earned energy of today (`*` = [0,1,2,3])
+
 ### netzfrequenzmessung.de
 
 The website [netzfrequenzmessung.de](https://www.netzfrequenzmessung.de)
 provides an API to query the grid frequency. You can fetch data from
 there. Please observe their terms of use.
 
+Note: The measurements apply to your location, if it is part of the
+CESA grid in Europe (which also includes Morocco, Algeria, Tunisia, 
+and Turkey) and no major incident is active, that temporarily divides 
+the grid into independent parts.
+
 Tag | Unit | Description
 ----|------|--------------
-`internetGridFrequency` | hertz | grid frequency
+`internetGridFrequency` | Hz | grid frequency as measured by netzfrequenzmessung.de
 
 ### General observation types
 
@@ -665,7 +760,7 @@ The acceptable range is set by the `grid_frequency_limits` configuration
 key, which has the default of 49.82 to 50.18, if not set.
 
 You need at least 2 decimals of frequency to use this feature. Otherwise
-it makes not sense because of the limits.
+it makes no sense because of the limits.
 
 Measurements are fetched as defined by the query interval (default is
 approximately one second). For WeeWX,
@@ -694,3 +789,4 @@ infrequent to reveal anything of interest.
 * [myPV ACTHOR 9 and 9s](https://www.my-pv.com/de/produkte/ac-thor-9s)
 * [example page](https://www.woellsdorf-wetter.de/photovoltaics/)
 * [photovoltaics icons](https://github.com/roe-dl/photovoltaicsicons)
+* [Python hoymiles-wifi driver](https://pypi.org/project/hoymiles-wifi/)

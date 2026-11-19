@@ -14,6 +14,7 @@ CONFIG = """[E3DC]
         protocol = netzfrequenzmessungde
         query_interval = 1
     [[S10EPRO]]
+        enable = true
         protocol = RSCP
         host = replace_me
         username = replace_me
@@ -22,9 +23,21 @@ CONFIG = """[E3DC]
         query_interval = 1 # optional
         #mqtt_topic = e3dc/weewx # normally not required
     [[ACTHOR]]
+        enable = false
         protocol = MyPV
         host = replace_me
         #mqtt_topic = acthor/weewx # normally not required
+    [[DTU]]
+        enable = false
+        protocol = DTU
+        host = replace_me
+        [[[inverter1]]]
+            # serial number of the inverter (required)
+            serial_number = replace_me
+            # observation type name prefix (optional)
+            prefix = replace_me
+            # observation type name suffix (optional)
+            #suffix = replace_me
     [[MQTT]]
         protocol = MQTT
         enable = True

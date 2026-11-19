@@ -33,3 +33,4 @@
 * retrieve data from netzfrequenzmessung.de
 * remove out of range frequency values in some conditions
 * upgrade defaults
+* support for Hoymiles inverters
