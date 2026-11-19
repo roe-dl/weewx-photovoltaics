@@ -31,6 +31,7 @@ CONFIG = """[E3DC]
         enable = false
         protocol = DTU
         host = replace_me
+        query_interval = 32
         [[[inverter1]]]
             # serial number of the inverter (required)
             serial_number = replace_me

@@ -151,7 +151,8 @@ control panel of the device first. It is different from the user password.
         enable = false
         protocol = DTU
         host = replace_me
-        query_interval = 1
+        # See note in the Hoymiles section
+        query_interval = 32
         # maximum number of trackers per inverter (optional, default 4)
         #trackers = 4
         # inverters (name the sections useful)
@@ -392,8 +393,9 @@ database manually by `weectl database add-column ... --data-binding=pv_binding`
 Note: The Hoymiles inverters do not provide data during the night.
 WeeWX shows `N/A` then.
 
-Note: The DTU serves one device only at a time. While you retrieve data with
-this service, the Hoymiles mobile phone app does not receive data.
+Note from [pypi.org](https://pypi.org/project/hoymiles-wifi/):
+Setting the update interval (i.e. option `query_interval`) below approximately 32 seconds may disable Hoymiles cloud functionality. To ensure proper communication with Hoymiles servers, keep the update interval at or above this threshold.
+Setting the update interval to 1–2 seconds could also cause disruptions in the App's connection.
 
 #### Hoymiles PVI AC
 
